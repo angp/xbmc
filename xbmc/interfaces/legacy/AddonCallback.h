@@ -39,16 +39,17 @@ namespace XBMCAddon
 
     bool hasHandler() { return handler.isNotNull(); }
 
-  public:
-    inline AddonCallback(const char* classname) : AddonClass(classname), handler(NULL)
+    inline AddonCallback() : handler(NULL)
     {
       // if there is a LanguageHook, it should be set already.
       if (languageHook != NULL)
         setHandler(languageHook->GetCallbackHandler());
     }
-    virtual ~AddonCallback();
+  public:
 
-    void setHandler(CallbackHandler* _handler) { handler = _handler; }
+    ~AddonCallback() override;
+
+    inline void setHandler(CallbackHandler* _handler) { handler = _handler; }
     void invokeCallback(Callback* callback);
   };
 }

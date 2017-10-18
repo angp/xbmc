@@ -27,7 +27,6 @@
 
 HttpParser::HttpParser() :
     _headerStart(0),
-    _bodyStart(0),
     _parsedTo( 0 ),
     _state( 0 ),
     _keyIndex(0),
@@ -40,10 +39,7 @@ HttpParser::HttpParser() :
 
 }
 
-HttpParser::~HttpParser()
-{
-
-}
+HttpParser::~HttpParser() = default;
 
 void
 HttpParser::parseHeader()
@@ -206,19 +202,19 @@ HttpParser::addBytes( const char* bytes, unsigned len )
 }
 
 const char*
-HttpParser::getMethod()
+HttpParser::getMethod() const
 {
     return &_data[0];
 }
 
 const char*
-HttpParser::getUri()
+HttpParser::getUri() const
 {
     return &_data[_uriIndex];
 }
 
 const char*
-HttpParser::getQueryString()
+HttpParser::getQueryString() const
 {
     const char* pos = getUri();
     while( *pos ) {
@@ -232,7 +228,7 @@ HttpParser::getQueryString()
 }
 
 const char* 
-HttpParser::getBody()
+HttpParser::getBody() const
 {
     if ( _contentLength > 0 ) {
         return &_data[_contentStart];
@@ -243,9 +239,9 @@ HttpParser::getBody()
 
 // key should be in lower case.
 const char* 
-HttpParser::getValue( const char* key )
+HttpParser::getValue( const char* key ) const
 {
-    for( IntArray::iterator iter = _keys.begin();
+    for( IntArray::const_iterator iter = _keys.begin();
             iter != _keys.end(); ++iter  )
     {
         unsigned index = *iter;
@@ -259,7 +255,7 @@ HttpParser::getValue( const char* key )
 }
 
 unsigned
-HttpParser::getContentLength()
+HttpParser::getContentLength() const
 {
     return _contentLength;
 }

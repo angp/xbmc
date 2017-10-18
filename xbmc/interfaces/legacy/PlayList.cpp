@@ -30,22 +30,21 @@ namespace XBMCAddon
 {
   namespace xbmc
   {
-    // TODO: need a means to check for a valid construction
-    //  either by throwing an exception or by an "isValid" check
-    PlayList::PlayList(int playList) throw (PlayListException) : 
-      AddonClass("PlayList"),
-      refs(1), iPlayList(playList), pPlayList(NULL)
+    //! @todo need a means to check for a valid construction
+    //!  either by throwing an exception or by an "isValid" check
+    PlayList::PlayList(int playList) : 
+      iPlayList(playList), pPlayList(NULL)
     {
       // we do not create our own playlist, just using the ones from playlistplayer
       if (iPlayList != PLAYLIST_MUSIC &&
           iPlayList != PLAYLIST_VIDEO)
         throw PlayListException("PlayList does not exist");
 
-      pPlayList = &g_playlistPlayer.GetPlaylist(playList);
+      pPlayList = &CServiceBroker::GetPlaylistPlayer().GetPlaylist(playList);
       iPlayList = playList;
     }
 
-    PlayList::~PlayList()  { }
+    PlayList::~PlayList() = default;
 
     void PlayList::add(const String& url, XBMCAddon::xbmcgui::ListItem* listitem, int index)
     {
@@ -70,7 +69,7 @@ namespace XBMCAddon
       pPlayList->Insert(items, index);
     }
 
-    bool PlayList::load(const char* cFileName) throw (PlayListException)
+    bool PlayList::load(const char* cFileName)
     {
       CFileItem item(cFileName);
       item.SetPath(cFileName);
@@ -81,7 +80,7 @@ namespace XBMCAddon
 
         // load a playlist like .m3u, .pls
         // first get correct factory to load playlist
-        std::auto_ptr<CPlayList> pPlayList (CPlayListFactory::Create(item));
+        std::unique_ptr<CPlayList> pPlayList (CPlayListFactory::Create(item));
         if ( NULL != pPlayList.get())
         {
           // load it
@@ -90,13 +89,13 @@ namespace XBMCAddon
             return false;
 
           // clear current playlist
-          g_playlistPlayer.ClearPlaylist(this->iPlayList);
+          CServiceBroker::GetPlaylistPlayer().ClearPlaylist(this->iPlayList);
 
           // add each item of the playlist to the playlistplayer
           for (int i=0; i < (int)pPlayList->size(); ++i)
           {
             CFileItemPtr playListItem =(*pPlayList)[i];
-            if (playListItem->GetLabel().IsEmpty())
+            if (playListItem->GetLabel().empty())
               playListItem->SetLabel(URIUtils::GetFileName(playListItem->GetPath()));
 
             this->pPlayList->Add(playListItem);
@@ -137,10 +136,10 @@ namespace XBMCAddon
 
     int PlayList::getposition()
     {
-      return g_playlistPlayer.GetCurrentSong();
+      return CServiceBroker::GetPlaylistPlayer().GetCurrentSong();
     }
 
-    XBMCAddon::xbmcgui::ListItem* PlayList::operator [](long i) throw (PlayListException)
+    XBMCAddon::xbmcgui::ListItem* PlayList::operator [](long i)
     {
       int iPlayListSize = size();
 

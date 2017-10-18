@@ -20,19 +20,22 @@
  *
  */
 
+#include <string>
+#include <vector>
+
 #include "guilib/GUIWindow.h"
 
 class CGUIWindowSystemInfo : public CGUIWindow
 {
 public:
   CGUIWindowSystemInfo(void);
-  virtual ~CGUIWindowSystemInfo(void);
-  virtual bool OnMessage(CGUIMessage& message);
-  virtual void FrameMove();
+  ~CGUIWindowSystemInfo(void) override;
+  bool OnMessage(CGUIMessage& message) override;
+  void FrameMove() override;
 private:
-  unsigned int m_section;
+  int  m_section;
   void ResetLabels();
   void SetControlLabel(int id, const char *format, int label, int info);
-  std::vector<CStdString> m_diskUsage;
+  std::vector<std::string> m_diskUsage;
 };
 

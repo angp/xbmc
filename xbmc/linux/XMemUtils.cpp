@@ -23,6 +23,7 @@
  */
 
 #include "XMemUtils.h"
+#include "Util.h"
 
 #if defined(TARGET_DARWIN)
 #include <mach/mach.h>
@@ -33,15 +34,15 @@
 
 // aligned memory allocation.
 // in order to do so - we alloc extra space and store the original allocation in it (so that we can free later on).
-// the returned address will be the nearest alligned address within the space allocated.
+// the returned address will be the nearest aligned address within the space allocated.
 void *_aligned_malloc(size_t s, size_t alignTo) {
 
   char *pFull = (char*)malloc(s + alignTo + sizeof(char *));
-  char *pAlligned = (char *)ALIGN(((unsigned long)pFull + sizeof(char *)), alignTo);
+  char *pAligned = (char *)ALIGN(((unsigned long)pFull + sizeof(char *)), alignTo);
 
-  *(char **)(pAlligned - sizeof(char*)) = pFull;
+  *(char **)(pAligned - sizeof(char*)) = pFull;
 
-  return(pAlligned);
+  return(pAligned);
 }
 
 void _aligned_free(void *p) {
@@ -70,7 +71,7 @@ void GlobalMemoryStatusEx(LPMEMORYSTATUSEX lpBuffer)
   uint64_t physmem;
   size_t len = sizeof physmem;
   int mib[2] = { CTL_HW, HW_MEMSIZE };
-  size_t miblen = sizeof(mib) / sizeof(mib[0]);
+  size_t miblen = ARRAY_SIZE(mib);
 
   // Total physical memory.
   if (sysctl(mib, miblen, &physmem, &len, NULL, 0) == 0 && len == sizeof (physmem))
@@ -93,10 +94,19 @@ void GlobalMemoryStatusEx(LPMEMORYSTATUSEX lpBuffer)
   if (host_statistics(stat_port, HOST_VM_INFO, (host_info_t)&vm_stat, &count) == 0)
   {
       // Find page size.
+#if defined(TARGET_DARWIN_IOS)
+      // on ios with 64bit ARM CPU the page size is wrongly given as 16K
+      // when using the sysctl approach. We can use the host_page_size
+      // function instead which will give the proper 4k pagesize
+      // on both 32 and 64 bit ARM CPUs
+      vm_size_t pageSize;
+      host_page_size(stat_port, &pageSize);
+#else
       int pageSize;
       mib[0] = CTL_HW; mib[1] = HW_PAGESIZE;
       len = sizeof(int);
       if (sysctl(mib, miblen, &pageSize, &len, NULL, 0) == 0)
+#endif
       {
           uint64_t used = (vm_stat.active_count + vm_stat.inactive_count + vm_stat.wire_count) * pageSize;
 

@@ -31,11 +31,11 @@ enum ERecentlyAddedFlag
 class CRecentlyAddedJob : public CJob
 {
 public:
-  CRecentlyAddedJob(int flag);
-  bool UpdateVideo();
-  bool UpdateMusic();
-  bool UpdateTotal();
-  virtual bool DoWork();
+  explicit CRecentlyAddedJob(int flag);
+  static bool UpdateVideo();
+  static bool UpdateMusic();
+  static bool UpdateTotal();
+  bool DoWork() override;
 private:
   int m_flag;
 };

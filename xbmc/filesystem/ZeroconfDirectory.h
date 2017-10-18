@@ -31,9 +31,9 @@ namespace XFILE
   {
     public:
       CZeroconfDirectory(void);
-      virtual ~CZeroconfDirectory(void);
-      virtual bool GetDirectory(const CStdString& strPath, CFileItemList &items);
-      virtual DIR_CACHE_TYPE GetCacheType(const CStdString& strPath) const { return DIR_CACHE_NEVER; };
+      ~CZeroconfDirectory(void) override;
+      bool GetDirectory(const CURL& url, CFileItemList &items) override;
+      DIR_CACHE_TYPE GetCacheType(const CURL& url) const override { return DIR_CACHE_NEVER; };
   };
 }
 

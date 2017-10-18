@@ -29,8 +29,7 @@
 #include "utils/log.h"
 #ifdef TARGET_WINDOWS
 #include "my_ntddcdrm.h"
-#include "WIN32Util.h"
-#include "utils/CharsetConverter.h"
+#include "platform/win32/CharsetConverter.h"
 #endif
 #if defined(TARGET_LINUX)
 #include <linux/limits.h>
@@ -60,12 +59,15 @@
 #include <sys/syslimits.h>
 #endif
 #include "cdioSupport.h"
-#include "filesystem/iso9660.h"
 #include "MediaManager.h"
 #ifdef TARGET_POSIX
 #include "XHandle.h"
+#include "XFileUtils.h"
 #endif
 
+#ifdef HAS_DVD_DRIVE
+using namespace MEDIA_DETECT;
+#endif
 
 PVOID CIoSupport::m_rawXferBuffer;
 
@@ -80,9 +82,10 @@ HANDLE CIoSupport::OpenCDROM()
   hDevice->fd = fd;
   hDevice->m_bCDROM = true;
 #elif defined(TARGET_WINDOWS)
-  hDevice = CreateFile(g_mediaManager.TranslateDevicePath("",true), GENERIC_READ, FILE_SHARE_READ,
-                       NULL, OPEN_EXISTING,
-                       FILE_FLAG_RANDOM_ACCESS, NULL );
+  auto filename = KODI::PLATFORM::WINDOWS::ToW(g_mediaManager.TranslateDevicePath("", true));
+  hDevice = CreateFile(filename.c_str(), GENERIC_READ, FILE_SHARE_READ,
+                       nullptr, OPEN_EXISTING,
+                       FILE_FLAG_RANDOM_ACCESS, nullptr );
 #else
 
   hDevice = CreateFile("\\\\.\\Cdrom0", GENERIC_READ, FILE_SHARE_READ,
@@ -179,7 +182,7 @@ INT CIoSupport::ReadSector(HANDLE hDevice, DWORD dwSector, LPSTR lpczBuffer)
     }
   }
 
-  OutputDebugString("CD Read error\n");
+  CLog::Log(LOGERROR, "%s: CD Read error", __FUNCTION__);
   return -1;
 }
 

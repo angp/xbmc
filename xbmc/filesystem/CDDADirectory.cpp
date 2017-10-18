@@ -20,29 +20,25 @@
 
 #include "system.h"
 
-#ifdef HAS_DVD_DRIVE
-
 #include "CDDADirectory.h"
 #include "music/MusicDatabase.h"
 #include "FileItem.h"
 #include "File.h"
 #include "storage/MediaManager.h"
+#include "utils/StringUtils.h"
 
 using namespace XFILE;
 using namespace MEDIA_DETECT;
 
-CCDDADirectory::CCDDADirectory(void)
-{
-}
+CCDDADirectory::CCDDADirectory(void) = default;
 
-CCDDADirectory::~CCDDADirectory(void)
-{
-}
+CCDDADirectory::~CCDDADirectory(void) = default;
 
 
-bool CCDDADirectory::GetDirectory(const CStdString& strPath, CFileItemList &items)
+bool CCDDADirectory::GetDirectory(const CURL& url, CFileItemList &items)
 {
   // Reads the tracks from an audio cd
+  std::string strPath = url.Get();
 
   if (!g_mediaManager.IsDiscInDrive(strPath))
     return false;
@@ -70,13 +66,11 @@ bool CCDDADirectory::GetDirectory(const CStdString& strPath, CFileItemList &item
       continue;
 
     // Format standard cdda item label
-    CStdString strLabel;
-    strLabel.Format("Track %02.2i", i);
+    std::string strLabel = StringUtils::Format("Track %2.2i", i);
 
     CFileItemPtr pItem(new CFileItem(strLabel));
     pItem->m_bIsFolder = false;
-    CStdString path;
-    path.Format("cdda://local/%02.2i.cdda", i);
+    std::string path = StringUtils::Format("cdda://local/%2.2i.cdda", i);
     pItem->SetPath(path);
 
     struct __stat64 s64;
@@ -87,5 +81,3 @@ bool CCDDADirectory::GetDirectory(const CStdString& strPath, CFileItemList &item
   }
   return true;
 }
-
-#endif

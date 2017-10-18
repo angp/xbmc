@@ -19,24 +19,25 @@
  *
  */
 
-#include "IHTTPRequestHandler.h"
-#include "addons/IAddon.h"
+#include <string>
 
-class CHTTPWebinterfaceHandler : public IHTTPRequestHandler
+#include "addons/IAddon.h"
+#include "network/httprequesthandler/HTTPFileHandler.h"
+
+class CHTTPWebinterfaceHandler : public CHTTPFileHandler
 {
 public:
-  CHTTPWebinterfaceHandler() { };
+  CHTTPWebinterfaceHandler() = default;
+  ~CHTTPWebinterfaceHandler() override = default;
   
-  virtual IHTTPRequestHandler* GetInstance() { return new CHTTPWebinterfaceHandler(); }
-  virtual bool CheckHTTPRequest(const HTTPRequest &request);
-  virtual int HandleHTTPRequest(const HTTPRequest &request);
+  IHTTPRequestHandler* Create(const HTTPRequest &request) const override { return new CHTTPWebinterfaceHandler(request); }
+  bool CanHandleRequest(const HTTPRequest &request) const override;
 
-  virtual std::string GetHTTPRedirectUrl() const { return m_url; }
-  virtual std::string GetHTTPResponseFile() const { return m_url; }
-  
   static int ResolveUrl(const std::string &url, std::string &path);
   static int ResolveUrl(const std::string &url, std::string &path, ADDON::AddonPtr &addon);
+  static bool ResolveAddon(const std::string &url, ADDON::AddonPtr &addon);
+  static bool ResolveAddon(const std::string &url, ADDON::AddonPtr &addon, std::string &addonPath);
 
-private:
-  std::string m_url;
+protected:
+  explicit CHTTPWebinterfaceHandler(const HTTPRequest &request);
 };

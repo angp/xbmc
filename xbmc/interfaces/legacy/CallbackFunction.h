@@ -38,13 +38,13 @@ namespace XBMCAddon
   { 
   protected:
     AddonClass* addonClassObject;
-    Callback(AddonClass* _object, const char* classname) : AddonClass(classname), addonClassObject(_object) {}
+    explicit Callback(AddonClass* _object) : addonClassObject(_object) { XBMC_TRACE; }
 
   public:
     virtual void executeCallback() = 0;
-    virtual ~Callback();
+    ~Callback() override;
 
-    AddonClass* getObject() { return addonClassObject; }
+    AddonClass* getObject() { XBMC_TRACE; return addonClassObject; }
   };
 
   struct cb_null_type {};
@@ -70,11 +70,11 @@ namespace XBMCAddon
 
   public:
     CallbackFunction(M* object, MemberFunction method) : 
-      Callback(object, "CallbackFunction<M>"), meth(method), obj(object) {}
+      Callback(object), meth(method), obj(object) { XBMC_TRACE; }
 
-    virtual ~CallbackFunction() { deallocating(); }
+    ~CallbackFunction() override { XBMC_TRACE; deallocating(); }
 
-    virtual void executeCallback() { TRACE; ((*obj).*(meth))(); }
+    void executeCallback() override { XBMC_TRACE; ((*obj).*(meth))(); }
   };
 
   /**
@@ -93,12 +93,12 @@ namespace XBMCAddon
 
   public:
     CallbackFunction(M* object, MemberFunction method, P1 parameter) : 
-      Callback(object, "CallbackFunction<M,P1>"), meth(method), obj(object),
-      param(parameter) {}
+      Callback(object), meth(method), obj(object),
+      param(parameter) { XBMC_TRACE; }
 
-    virtual ~CallbackFunction() { deallocating(); }
+    ~CallbackFunction() override { XBMC_TRACE; deallocating(); }
 
-    virtual void executeCallback() { TRACE; ((*obj).*(meth))(param); }
+    void executeCallback() override { XBMC_TRACE; ((*obj).*(meth))(param); }
   };
 
   /**
@@ -118,12 +118,12 @@ namespace XBMCAddon
 
   public:
     CallbackFunction(M* object, MemberFunction method, P1* parameter) : 
-      Callback(object, "CallbackFunction<M,P1>"), meth(method), obj(object),
-      param(parameter) {}
+      Callback(object), meth(method), obj(object),
+      param(parameter) { XBMC_TRACE; }
 
-    virtual ~CallbackFunction() { deallocating(); }
+    ~CallbackFunction() override { XBMC_TRACE; deallocating(); }
 
-    virtual void executeCallback() { TRACE; ((*obj).*(meth))(param); }
+    void executeCallback() override { XBMC_TRACE; ((*obj).*(meth))(param); }
   };
 
 
@@ -144,15 +144,40 @@ namespace XBMCAddon
 
   public:
     CallbackFunction(M* object, MemberFunction method, P1 parameter, P2 parameter2) : 
-      Callback(object, "CallbackFunction<M,P1,P2>"), meth(method), obj(object),
-      param1(parameter), param2(parameter2) {}
+      Callback(object), meth(method), obj(object),
+      param1(parameter), param2(parameter2) { XBMC_TRACE; }
 
-    virtual ~CallbackFunction() { deallocating(); }
+    ~CallbackFunction() override { XBMC_TRACE; deallocating(); }
 
-    virtual void executeCallback() { TRACE; ((*obj).*(meth))(param1,param2); }
+    void executeCallback() override { XBMC_TRACE; ((*obj).*(meth))(param1,param2); }
   };
 
 
+  /**
+   * This is the template to carry a callback to a member function
+   *  that returns 'void' (has no return) and takes three parameters.
+   */
+  template<class M, typename P1, typename P2, typename P3> class CallbackFunction<M,P1,P2,P3, cb_null_type, cb_null_type> : public Callback
+  {
+  public:
+    typedef void (M::*MemberFunction)(P1,P2,P3);
+
+  protected:
+    MemberFunction meth;
+    M* obj;
+    P1 param1;
+    P2 param2;
+    P3 param3;
+
+  public:
+    CallbackFunction(M* object, MemberFunction method, P1 parameter, P2 parameter2, P3 parameter3) : 
+      Callback(object), meth(method), obj(object),
+      param1(parameter), param2(parameter2), param3(parameter3) { XBMC_TRACE; }
+
+    ~CallbackFunction() override { XBMC_TRACE; deallocating(); }
+
+    void executeCallback() override { XBMC_TRACE; ((*obj).*(meth))(param1,param2,param3); }
+  };
 }
 
 

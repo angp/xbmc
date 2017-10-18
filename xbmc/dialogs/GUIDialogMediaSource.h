@@ -20,6 +20,9 @@
  *
  */
 
+#include <string>
+#include <vector>
+
 #include "guilib/GUIDialog.h"
 
 class CFileItemList;
@@ -30,19 +33,18 @@ class CGUIDialogMediaSource :
 {
 public:
   CGUIDialogMediaSource(void);
-  virtual ~CGUIDialogMediaSource(void);
-  virtual bool OnMessage(CGUIMessage& message);
-  virtual void OnDeinitWindow(int nextWindowID);
-  virtual bool OnBack(int actionID);
-  virtual void OnWindowLoaded();
-  static bool ShowAndAddMediaSource(const CStdString &type);
-  static bool ShowAndEditMediaSource(const CStdString &type, const CMediaSource &share);
-  static bool ShowAndEditMediaSource(const CStdString &type, const CStdString &share);
+  ~CGUIDialogMediaSource(void) override;
+  bool OnMessage(CGUIMessage& message) override;
+  void OnDeinitWindow(int nextWindowID) override;
+  bool OnBack(int actionID) override;
+  static bool ShowAndAddMediaSource(const std::string &type);
+  static bool ShowAndEditMediaSource(const std::string &type, const CMediaSource &share);
+  static bool ShowAndEditMediaSource(const std::string &type, const std::string &share);
 
   bool IsConfirmed() const { return m_confirmed; };
 
   void SetShare(const CMediaSource &share);
-  void SetTypeOfMedia(const CStdString &type, bool editNotAdd = false);
+  void SetTypeOfMedia(const std::string &type, bool editNotAdd = false);
 protected:
   void OnPathBrowse(int item);
   void OnPath(int item);
@@ -54,10 +56,10 @@ protected:
   int GetSelectedItem();
   void HighlightItem(int item);
 
-  std::vector<CStdString> GetPaths();
+  std::vector<std::string> GetPaths() const;
 
-  CStdString m_type;
-  CStdString m_name;
+  std::string m_type;
+  std::string m_name;
   CFileItemList* m_paths;
   bool m_confirmed;
   bool m_bNameChanged;

@@ -19,11 +19,6 @@
  *
  */
 
-#if defined(TARGET_RASPBERRY_PI)
-
-#if (defined HAVE_CONFIG_H) && (!defined WIN32)
-  #include "config.h"
-#endif
 #ifndef __GNUC__
 #pragma warning(push)
 #pragma warning(disable:4244)
@@ -48,6 +43,9 @@ public:
   virtual void bcm_host_init() = 0;
   virtual void bcm_host_deinit() = 0;
   virtual int32_t graphics_get_display_size( const uint16_t display_number, uint32_t *width, uint32_t *height) = 0;
+  virtual int vc_tv_power_off() = 0;
+  virtual int vc_tv_sdtv_power_on(SDTV_MODE_T mode, SDTV_OPTIONS_T *options) = 0;
+  virtual int vc_tv_hdmi_power_on_preferred() = 0;
   virtual int vc_tv_hdmi_power_on_best(uint32_t width, uint32_t height, uint32_t frame_rate,
                                        HDMI_INTERLACED_T scan_mode, EDID_MODE_MATCH_FLAG_T match_flags) = 0;
   virtual int vc_tv_hdmi_power_on_best_3d(uint32_t width, uint32_t height, uint32_t frame_rate,
@@ -73,7 +71,18 @@ public:
                                                               VC_DISPMANX_ALPHA_T *alpha,
                                                               DISPMANX_CLAMP_T *clamp, DISPMANX_TRANSFORM_T transform ) = 0;
   virtual int vc_dispmanx_update_submit_sync( DISPMANX_UPDATE_HANDLE_T update ) = 0;
+  virtual int vc_dispmanx_update_submit( DISPMANX_UPDATE_HANDLE_T update, DISPMANX_CALLBACK_FUNC_T cb_func, void *cb_arg ) = 0;
+
   virtual int vc_dispmanx_element_remove( DISPMANX_UPDATE_HANDLE_T update, DISPMANX_ELEMENT_HANDLE_T element ) = 0;
+  virtual int vc_dispmanx_element_change_attributes( DISPMANX_UPDATE_HANDLE_T update,
+                                                              DISPMANX_ELEMENT_HANDLE_T element,
+                                                              uint32_t change_flags,
+                                                              int32_t layer,
+                                                              uint8_t opacity,
+                                                              const VC_RECT_T *dest_rect,
+                                                              const VC_RECT_T *src_rect,
+                                                              DISPMANX_RESOURCE_HANDLE_T mask,
+                                                              DISPMANX_TRANSFORM_T transform ) = 0;
   virtual int vc_dispmanx_display_close( DISPMANX_DISPLAY_HANDLE_T display ) = 0;
   virtual int vc_dispmanx_display_get_info( DISPMANX_DISPLAY_HANDLE_T display, DISPMANX_MODEINFO_T * pinfo ) = 0;
   virtual int vc_dispmanx_display_set_background( DISPMANX_UPDATE_HANDLE_T update, DISPMANX_DISPLAY_HANDLE_T display,
@@ -92,6 +101,12 @@ public:
     { return ::bcm_host_deinit(); };
   virtual int32_t graphics_get_display_size( const uint16_t display_number, uint32_t *width, uint32_t *height)
     { return ::graphics_get_display_size(display_number, width, height); };
+  virtual int vc_tv_power_off()
+    { return ::vc_tv_power_off(); }
+  virtual int vc_tv_sdtv_power_on(SDTV_MODE_T mode, SDTV_OPTIONS_T *options)
+    { return ::vc_tv_sdtv_power_on(mode, options); }
+  virtual int vc_tv_hdmi_power_on_preferred()
+    { return ::vc_tv_hdmi_power_on_preferred(); }
   virtual int vc_tv_hdmi_power_on_best(uint32_t width, uint32_t height, uint32_t frame_rate,
                                        HDMI_INTERLACED_T scan_mode, EDID_MODE_MATCH_FLAG_T match_flags)
     { return ::vc_tv_hdmi_power_on_best(width, height, frame_rate, scan_mode, match_flags); };
@@ -132,8 +147,20 @@ public:
     { return ::vc_dispmanx_element_add(update, display, layer, dest_rect, src, src_rect, protection, alpha, clamp, transform); };
   virtual int vc_dispmanx_update_submit_sync( DISPMANX_UPDATE_HANDLE_T update )
     { return ::vc_dispmanx_update_submit_sync(update); };
+  virtual int vc_dispmanx_update_submit( DISPMANX_UPDATE_HANDLE_T update, DISPMANX_CALLBACK_FUNC_T cb_func, void *cb_arg )
+    { return ::vc_dispmanx_update_submit(update, cb_func, cb_arg); };
   virtual int vc_dispmanx_element_remove( DISPMANX_UPDATE_HANDLE_T update, DISPMANX_ELEMENT_HANDLE_T element )
     { return ::vc_dispmanx_element_remove(update, element); };
+  virtual int vc_dispmanx_element_change_attributes( DISPMANX_UPDATE_HANDLE_T update,
+                                                              DISPMANX_ELEMENT_HANDLE_T element,
+                                                              uint32_t change_flags,
+                                                              int32_t layer,
+                                                              uint8_t opacity,
+                                                              const VC_RECT_T *dest_rect,
+                                                              const VC_RECT_T *src_rect,
+                                                              DISPMANX_RESOURCE_HANDLE_T mask,
+                                                              DISPMANX_TRANSFORM_T transform )
+    { return ::vc_dispmanx_element_change_attributes( update, element, change_flags, layer, opacity, dest_rect, src_rect, mask, transform ); };
   virtual int vc_dispmanx_display_close( DISPMANX_DISPLAY_HANDLE_T display )
     { return ::vc_dispmanx_display_close(display); };
   virtual int vc_dispmanx_display_get_info( DISPMANX_DISPLAY_HANDLE_T display, DISPMANX_MODEINFO_T *pinfo )
@@ -186,7 +213,17 @@ class DllBcmHost : public DllDynamic, DllBcmHostInterface
                                                                        VC_DISPMANX_ALPHA_T *p8,
                                                                        DISPMANX_CLAMP_T *p9, DISPMANX_TRANSFORM_T p10 ))
   DEFINE_METHOD1(int, vc_dispmanx_update_submit_sync, (DISPMANX_UPDATE_HANDLE_T p1))
+  DEFINE_METHOD3(int, vc_dispmanx_update_submit, (DISPMANX_UPDATE_HANDLE_T p1, DISPMANX_CALLBACK_FUNC_T p2, void *p3))
   DEFINE_METHOD2(int, vc_dispmanx_element_remove, (DISPMANX_UPDATE_HANDLE_T p1, DISPMANX_ELEMENT_HANDLE_T p2))
+  DEFINE_METHOD9(int, vc_dispmanx_element_change_attributes, ( DISPMANX_UPDATE_HANDLE_T p1,
+                                                                DISPMANX_ELEMENT_HANDLE_T p2,
+                                                                uint32_t p3,
+                                                                int32_t p4,
+                                                                uint8_t p5,
+                                                                const VC_RECT_T *p6,
+                                                                const VC_RECT_T *p7rect,
+                                                                DISPMANX_RESOURCE_HANDLE_T p8,
+                                                                DISPMANX_TRANSFORM_T p9))
   DEFINE_METHOD1(int, vc_dispmanx_display_close, (DISPMANX_DISPLAY_HANDLE_T p1))
   DEFINE_METHOD2(int, vc_dispmanx_display_get_info, (DISPMANX_DISPLAY_HANDLE_T p1, DISPMANX_MODEINFO_T *p2))
   DEFINE_METHOD5(int, vc_dispmanx_display_set_background, ( DISPMANX_UPDATE_HANDLE_T p1, DISPMANX_DISPLAY_HANDLE_T p2,
@@ -213,7 +250,9 @@ class DllBcmHost : public DllDynamic, DllBcmHostInterface
     RESOLVE_METHOD(vc_dispmanx_update_start)
     RESOLVE_METHOD(vc_dispmanx_element_add)
     RESOLVE_METHOD(vc_dispmanx_update_submit_sync)
+    RESOLVE_METHOD(vc_dispmanx_update_submit)
     RESOLVE_METHOD(vc_dispmanx_element_remove)
+    RESOLVE_METHOD(vc_dispmanx_element_change_attributes)
     RESOLVE_METHOD(vc_dispmanx_display_close)
     RESOLVE_METHOD(vc_dispmanx_display_get_info)
     RESOLVE_METHOD(vc_dispmanx_display_set_background)
@@ -226,6 +265,4 @@ public:
     return DllDynamic::Load();
   }
 };
-#endif
-
 #endif

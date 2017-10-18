@@ -18,14 +18,14 @@
  *  <http://www.gnu.org/licenses/>.
  *
  */
-#include "utils/StdString.h"
+#include <string>
 
 class IImage
 {
 public:
 
   IImage():m_width(0), m_height(0), m_originalWidth(0), m_originalHeight(0), m_orientation(0), m_hasAlpha(false) {};
-  virtual ~IImage() {};
+  virtual ~IImage() = default;
 
   /*!
    \brief Load an image from memory with the format m_strMimeType to determine it's size and orientation
@@ -39,11 +39,13 @@ public:
   /*!
    \brief Decodes the previously loaded image data to the output buffer in 32 bit raw bits
    \param pixels The output buffer
+   \param width The width of the image
+   \param height The height of the image
    \param pitch The pitch of the output buffer
    \param format The format of the output buffer (JpegIO only)
    \return true if the image data could be decoded to the output buffer
    */
-  virtual bool Decode(const unsigned char *pixels, unsigned int pitch, unsigned int format)=0;
+  virtual bool Decode(unsigned char* const pixels, unsigned int width, unsigned int height, unsigned int pitch, unsigned int format)=0;
   /*!
    \brief Encodes an thumbnail from raw bits of given memory location
    \remarks Caller need to call ReleaseThumbnailBuffer() afterwards to free the output buffer
@@ -57,19 +59,19 @@ public:
    \param bufferoutSize The output buffer size
    \return true if the thumbnail was successfully created
    */
-  virtual bool CreateThumbnailFromSurface(unsigned char* bufferin, unsigned int width, unsigned int height, unsigned int format, unsigned int pitch, const CStdString& destFile, 
+  virtual bool CreateThumbnailFromSurface(unsigned char* bufferin, unsigned int width, unsigned int height, unsigned int format, unsigned int pitch, const std::string& destFile, 
                                           unsigned char* &bufferout, unsigned int &bufferoutSize)=0;
   /*!
    \brief Frees the output buffer allocated by CreateThumbnailFromSurface
    */
   virtual void ReleaseThumbnailBuffer() {return;}
 
-  unsigned int Width()              { return m_width; }
-  unsigned int Height()             { return m_height; }
-  unsigned int originalWidth()      { return m_originalWidth; }
-  unsigned int originalHeight()     { return m_originalHeight; }
-  unsigned int Orientation()        { return m_orientation; }
-  bool hasAlpha()                   { return m_hasAlpha; }
+  unsigned int Width() const              { return m_width; }
+  unsigned int Height() const             { return m_height; }
+  unsigned int originalWidth() const      { return m_originalWidth; }
+  unsigned int originalHeight() const     { return m_originalHeight; }
+  unsigned int Orientation() const        { return m_orientation; }
+  bool hasAlpha() const                   { return m_hasAlpha; }
 
 protected:
 

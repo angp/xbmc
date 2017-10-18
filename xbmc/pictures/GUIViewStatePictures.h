@@ -25,12 +25,13 @@
 class CGUIViewStateWindowPictures : public CGUIViewState
 {
 public:
-  CGUIViewStateWindowPictures(const CFileItemList& items);
+  explicit CGUIViewStateWindowPictures(const CFileItemList& items);
+
+  std::string GetLockType() override;
+  std::string GetExtensions() override;
+  VECSOURCES& GetSources() override;
 
 protected:
-  virtual void SaveViewState();
-  virtual CStdString GetLockType();
-  virtual CStdString GetExtensions();
-  virtual VECSOURCES& GetSources();
+  void SaveViewState() override;
 };
 

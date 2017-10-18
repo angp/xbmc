@@ -20,10 +20,11 @@
  *
  */
 
-#include "utils/StdString.h"
+#include <string>
 
 #define FLOFSIZE 4
 #define SUBTITLE_CACHESIZE 50
+#define TELETEXT_PAGE_SIZE (40 * 25)
 
 #define number2char(c) ((c) + (((c) <= 9) ? '0' : ('A' - 10)))
 
@@ -47,9 +48,9 @@ enum /* indices in atrtable */
   ATR_MSGDRM1, /* message */
   ATR_MSGDRM2, /* message */
   ATR_MSGDRM3, /* message */
-  ATR_MENUHIL0, /* hilit menu line */
-  ATR_MENUHIL1, /* hilit menu line */
-  ATR_MENUHIL2, /* hilit menu line */
+  ATR_MENUHIL0, /* highlight menu line */
+  ATR_MENUHIL1, /* highlight menu line */
+  ATR_MENUHIL2, /* highlight menu line */
   ATR_MENU0, /* menu line */
   ATR_MENU1, /* menu line */
   ATR_MENU2, /* menu line */
@@ -393,8 +394,8 @@ typedef struct
 {
   bool Valid;
   long Timestamp;
-  unsigned char  PageChar[40 * 25];
-  TextPageAttr_t PageAtrb[40 * 25];
+  unsigned char  PageChar[TELETEXT_PAGE_SIZE];
+  TextPageAttr_t PageAtrb[TELETEXT_PAGE_SIZE];
 } TextSubtitleCache_t;
 
 /* main data structure */
@@ -431,7 +432,7 @@ typedef struct TextCacheStruct_t
   short           pop, gpop, drcs, gdrcs;
   unsigned short *ColorTable;
 
-  CStdString      line30;
+  std::string      line30;
 } TextCacheStruct_t;
 
 /* struct for all Information needed for Page Rendering */

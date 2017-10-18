@@ -1,5 +1,4 @@
 #pragma once
-
 /*
  *      Copyright (C) 2012-2013 Team XBMC
  *      http://xbmc.org
@@ -20,41 +19,49 @@
  *
  */
 
-#include "GUIWindowPVRCommon.h"
-#include "epg/EpgSearchFilter.h"
+#include "pvr/epg/EpgSearchFilter.h"
+#include "pvr/windows/GUIWindowPVRBase.h"
 
 namespace PVR
 {
-  class CGUIWindowPVR;
-
-  class CGUIWindowPVRSearch : public CGUIWindowPVRCommon
+  class CGUIWindowPVRSearchBase : public CGUIWindowPVRBase
   {
-    friend class CGUIWindowPVR;
-    friend class CGUIWindowPVRCommon;
-
   public:
-    CGUIWindowPVRSearch(CGUIWindowPVR *parent);
-    virtual ~CGUIWindowPVRSearch(void) {};
+    CGUIWindowPVRSearchBase(bool bRadio, int id, const std::string &xmlFile);
+    ~CGUIWindowPVRSearchBase() override = default;
 
-    void GetContextButtons(int itemNumber, CContextButtons &buttons) const;
-    bool OnContextButton(int itemNumber, CONTEXT_BUTTON button);
-    void UpdateData(bool bUpdateSelectedFile = true);
+    bool OnMessage(CGUIMessage& message)  override;
+    void GetContextButtons(int itemNumber, CContextButtons &buttons) override;
+    bool OnContextButton(int itemNumber, CONTEXT_BUTTON button) override;
+
+    /*!
+     * @brief set the item to search similar events for.
+     * @param item the epg event to search similar events for.
+     */
+    void SetItemToSearch(const CFileItemPtr &item);
+
+  protected:
+    void OnPrepareFileItems(CFileItemList &items) override;
+    std::string GetDirectoryPath(void) override { return ""; }
 
   private:
-
-    bool OnClickButton(CGUIMessage &message);
-    bool OnClickList(CGUIMessage &message);
-
     bool OnContextButtonClear(CFileItem *item, CONTEXT_BUTTON button);
-    bool OnContextButtonInfo(CFileItem *item, CONTEXT_BUTTON button);
-    bool OnContextButtonStartRecord(CFileItem *item, CONTEXT_BUTTON button);
-    bool OnContextButtonStopRecord(CFileItem *item, CONTEXT_BUTTON button);
 
-    bool ActionShowSearch(CFileItem *item);
-    void ShowSearchResults();
+    void OpenDialogSearch();
 
-    bool               m_bSearchStarted;
-    bool               m_bSearchConfirmed;
-    EPG::EpgSearchFilter m_searchfilter;
+    bool m_bSearchConfirmed;
+    CPVREpgSearchFilter m_searchfilter;
+  };
+
+  class CGUIWindowPVRTVSearch : public CGUIWindowPVRSearchBase
+  {
+  public:
+    CGUIWindowPVRTVSearch() : CGUIWindowPVRSearchBase(false, WINDOW_TV_SEARCH, "MyPVRSearch.xml") {}
+  };
+
+  class CGUIWindowPVRRadioSearch : public CGUIWindowPVRSearchBase
+  {
+  public:
+    CGUIWindowPVRRadioSearch() : CGUIWindowPVRSearchBase(true, WINDOW_RADIO_SEARCH, "MyPVRSearch.xml") {}
   };
 }

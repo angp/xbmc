@@ -19,13 +19,17 @@
  *
  */
 
-#include "Interfaces/AESink.h"
-#include "Utils/AEDeviceInfo.h"
+#include "cores/AudioEngine/Interfaces/AESink.h"
+#include "cores/AudioEngine/Utils/AEDeviceInfo.h"
 #include "threads/CriticalSection.h"
+#include "threads/Thread.h"
 
-class AERingBuffer;
+#include <deque>
+#include <set>
 
-class CAESinkAUDIOTRACK : public CThread, public IAESink
+#include <androidjni/AudioTrack.h>
+
+class CAESinkAUDIOTRACK : public IAESink
 {
 public:
   virtual const char *GetName() { return "AUDIOTRACK"; }
@@ -35,38 +39,61 @@ public:
 
   virtual bool Initialize(AEAudioFormat &format, std::string &device);
   virtual void Deinitialize();
-  virtual bool IsCompatible(const AEAudioFormat &format, const std::string &device);
+  bool IsInitialized();
 
-  virtual double       GetDelay        ();
-  virtual double       GetCacheTime    ();
+  virtual void         GetDelay        (AEDelayStatus& status);
+  virtual double       GetLatency      ();
   virtual double       GetCacheTotal   ();
-  virtual unsigned int AddPackets      (uint8_t *data, unsigned int frames, bool hasAudio, bool blocking = false);
+  virtual unsigned int AddPackets      (uint8_t **data, unsigned int frames, unsigned int offset);
+  virtual void         AddPause        (unsigned int millis);
   virtual void         Drain           ();
-  virtual bool         HasVolume       ();
-  virtual void         SetVolume       (float scale);
   static void          EnumerateDevicesEx(AEDeviceInfoList &list, bool force = false);
 
+protected:
+  jni::CJNIAudioTrack *CreateAudioTrack(int stream, int sampleRate, int channelMask, int encoding, int bufferSize);
+  static bool IsSupported(int sampleRateInHz, int channelConfig, int audioFormat);
+  static bool VerifySinkConfiguration(int sampleRate, int channelMask, int encoding);
+  static bool HasAmlHD();
+  static void UpdateAvailablePCMCapabilities();
+  static void UpdateAvailablePassthroughCapabilities();
+  
+  int AudioTrackWrite(char* audioData, int offsetInBytes, int sizeInBytes);
+  int AudioTrackWrite(char* audioData, int sizeInBytes, int64_t timestamp);
+
 private:
-  virtual void Process();
+  jni::CJNIAudioTrack  *m_at_jni;
+  int     m_jniAudioFormat;
+  
+  double                m_duration_written;
+  unsigned int          m_min_buffer_size;
+  int64_t               m_offset;
+  uint64_t              m_headPos;
+  // Moving Average computes the weighted average delay over
+  // a fixed size of delay values - current size: 20 values
+  double                GetMovingAverageDelay(double newestdelay);
+  // When AddPause is called the m_pause_time is increased
+  // by the package duration. This is only used for non IEC passthrough
+  XbmcThreads::EndTime  m_extTimer;
+
+  // We maintain our linear weighted average delay counter in here
+  // The n-th value (timely oldest value) is weighted with 1/n
+  // the newest value gets a weight of 1
+  std::deque<double>   m_linearmovingaverage;
 
   static CAEDeviceInfo m_info;
+  static std::set<unsigned int>       m_sink_sampleRates;
+  static bool m_sinkSupportsFloat;
+
   AEAudioFormat      m_format;
   double             m_volume;
-  bool               m_volume_changed;
-  CCriticalSection   m_volume_lock;
-  volatile int       m_min_frames;
   int16_t           *m_alignedS16;
-  AERingBuffer      *m_sinkbuffer;
   unsigned int       m_sink_frameSize;
-  double             m_sinkbuffer_sec;
-  double             m_sinkbuffer_sec_per_byte;
-
-  CEvent             m_wake;
-  CEvent             m_inited;
-  volatile bool      m_draining;
-  CCriticalSection   m_drain_lock;
+  unsigned int       m_sink_sampleRate;
   bool               m_passthrough;
-
   double             m_audiotrackbuffer_sec;
-  double             m_audiotrack_empty_sec;
+  int                m_encoding;
+
+  std::vector<float> m_floatbuf;
+  std::vector<int16_t> m_shortbuf;
+  std::vector<char> m_charbuf;
 };

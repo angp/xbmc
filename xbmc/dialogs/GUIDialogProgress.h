@@ -28,28 +28,29 @@ class CGUIDialogProgress :
 {
 public:
   CGUIDialogProgress(void);
-  virtual ~CGUIDialogProgress(void);
+  ~CGUIDialogProgress(void) override;
 
-  void StartModal();
-  virtual bool OnMessage(CGUIMessage& message);
-  virtual bool OnBack(int actionID);
-  virtual void OnWindowLoaded();
+  void Open(const std::string &param = "");
+  bool OnMessage(CGUIMessage& message) override;
+  bool OnBack(int actionID) override;
+  void OnWindowLoaded() override;
   void Progress();
-  void ProgressKeys();
   bool IsCanceled() const { return m_bCanceled; }
   void SetPercentage(int iPercentage);
   int GetPercentage() const { return m_percentage; };
   void ShowProgressBar(bool bOnOff);
 
   // Implements IProgressCallback
-  virtual void SetProgressMax(int iMax);
-  virtual void SetProgressAdvance(int nSteps=1);
-  virtual bool Abort();
+  void SetProgressMax(int iMax) override;
+  void SetProgressAdvance(int nSteps=1) override;
+  bool Abort() override;
 
   void SetCanCancel(bool bCanCancel);
 
 protected:
-  virtual int GetDefaultLabelID(int controlId) const;
+  void OnInitWindow() override;
+  int GetDefaultLabelID(int controlId) const override;
+  void Process(unsigned int currentTime, CDirtyRegionList &dirtyregions) override;
 
   bool m_bCanCancel;
   bool m_bCanceled;
@@ -57,4 +58,8 @@ protected:
   int  m_iCurrent;
   int  m_iMax;
   int m_percentage;
+  bool m_showProgress;
+
+private:
+  void Reset();
 };

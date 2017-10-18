@@ -37,30 +37,35 @@
 class CGUIToggleButtonControl : public CGUIButtonControl
 {
 public:
-  CGUIToggleButtonControl(int parentID, int controlID, float posX, float posY, float width, float height, const CTextureInfo& textureFocus, const CTextureInfo& textureNoFocus, const CTextureInfo& altTextureFocus, const CTextureInfo& altTextureNoFocus, const CLabelInfo &labelInfo);
-  virtual ~CGUIToggleButtonControl(void);
-  virtual CGUIToggleButtonControl *Clone() const { return new CGUIToggleButtonControl(*this); };
+  CGUIToggleButtonControl(int parentID, int controlID, float posX, float posY, float width, float height, const CTextureInfo& textureFocus, const CTextureInfo& textureNoFocus, const CTextureInfo& altTextureFocus, const CTextureInfo& altTextureNoFocus, const CLabelInfo &labelInfo, bool wrapMultiline = false);
+  ~CGUIToggleButtonControl(void) override;
+  CGUIToggleButtonControl *Clone() const override { return new CGUIToggleButtonControl(*this); };
 
-  virtual void Process(unsigned int currentTime, CDirtyRegionList &dirtyregions);
-  virtual void Render();
-  virtual bool OnAction(const CAction &action);
-  virtual void AllocResources();
-  virtual void FreeResources(bool immediately = false);
-  virtual void DynamicResourceAlloc(bool bOnOff);
-  virtual void SetInvalid();
-  virtual void SetPosition(float posX, float posY);
-  virtual void SetWidth(float width);
-  virtual void SetHeight(float height);
-  void SetLabel(const std::string& strLabel);
+  void Process(unsigned int currentTime, CDirtyRegionList &dirtyregions) override;
+  void Render() override;
+  bool OnAction(const CAction &action) override;
+  void AllocResources() override;
+  void FreeResources(bool immediately = false) override;
+  void DynamicResourceAlloc(bool bOnOff) override;
+  void SetInvalid() override;
+  void SetPosition(float posX, float posY) override;
+  void SetWidth(float width) override;
+  void SetHeight(float height) override;
+  void SetMinWidth(float minWidth) override;
+  void SetLabel(const std::string& label) override;
   void SetAltLabel(const std::string& label);
-  virtual CStdString GetDescription() const;
-  void SetToggleSelect(const CStdString &toggleSelect);
+  std::string GetDescription() const override;
+  void SetToggleSelect(const std::string &toggleSelect);
   void SetAltClickActions(const CGUIAction &clickActions);
 
 protected:
-  virtual bool UpdateColors();
-  virtual void OnClick();
+  bool UpdateColors() override;
+  void OnClick() override;
   CGUIButtonControl m_selectButton;
-  unsigned int m_toggleSelect;
+  INFO::InfoPtr m_toggleSelect;
+
+private:
+  void ProcessToggle(unsigned int currentTime);
+  std::string m_altLabel;
 };
 #endif

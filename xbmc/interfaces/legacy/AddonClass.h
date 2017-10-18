@@ -43,10 +43,13 @@
 
 #include "AddonString.h"
 #include "threads/SingleLock.h"
-#include "threads/Atomics.h"
+#ifdef XBMC_ADDON_DEBUG_MEMORY
 #include "utils/log.h"
-
+#endif
 #include "AddonUtils.h"
+
+#include <atomic>
+#include <typeindex>
 
 namespace XBMCAddon
 {
@@ -62,22 +65,19 @@ namespace XBMCAddon
    * If a scripting language bindings require specific handling there is a 
    *  hook to add in these language specifics that can be set here.
    */
-  class AddonClass
+  class AddonClass : public CCriticalSection
   {
   private:
-    long   refs;
-    String classname;
-    CCriticalSection thisLock;
+    mutable std::atomic<long> refs;
     bool m_isDeallocating;
-    // no copying
-    inline AddonClass(const AddonClass&);
 
+    // no copying
+    inline AddonClass(const AddonClass&) = delete;
 
 #ifdef XBMC_ADDON_DEBUG_MEMORY
     bool isDeleted;
 #endif
 
-    friend class Synchronize;
   protected:
     LanguageHook* languageHook;
 
@@ -85,22 +85,28 @@ namespace XBMCAddon
      * This method is meant to be called from the destructor of the
      *  lowest level class.
      *
-     * It's virtual because it's a conveinent place to receive messages that
+     * It's virtual because it's a convenient place to receive messages that
      *  we're about to go be deleted but prior to any real tear-down.
      *
      * Any overloading classes need to remember to pass the call up the chain.
      */
     virtual void deallocating()
     {
-      Synchronize lock(*this);
+      CSingleLock lock(*this);
       m_isDeallocating = true;
     }
 
+    /**
+     * This is meant to be called during static initialization and so isn't
+     * synchronized.
+     */
+    static short getNextClassIndex();
+
   public:
-    AddonClass(const char* classname);
+    AddonClass();
     virtual ~AddonClass();
 
-    inline const String& GetClassname() const { return classname; }
+    inline const char* GetClassname() const { return typeid(*this).name(); }
     inline LanguageHook* GetLanguageHook() { return languageHook; }
 
     /**
@@ -108,7 +114,9 @@ namespace XBMCAddon
      *  on the object. It will prevent the deallocation during
      *  the time it's held.
      */
-    bool isDeallocating() { TRACE; return m_isDeallocating; }
+    bool isDeallocating() { XBMC_TRACE; return m_isDeallocating; }
+
+    static short getNumAddonClasses();
 
 #ifdef XBMC_ADDON_DEBUG_MEMORY
     virtual 
@@ -118,9 +126,9 @@ namespace XBMCAddon
     void Release() const
 #ifndef XBMC_ADDON_DEBUG_MEMORY
     {
-      long ct = AtomicDecrement((long*)&refs);
+      long ct = --refs;
 #ifdef LOG_LIFECYCLE_EVENTS
-      CLog::Log(LOGDEBUG,"NEWADDON REFCNT decrementing to %ld on %s 0x%lx", ct,classname.c_str(), (long)(((void*)this)));
+      CLog::Log(LOGDEBUG,"NEWADDON REFCNT decrementing to %ld on %s 0x%lx", ct,GetClassname(), (long)(((void*)this)));
 #endif
       if(ct == 0)
         delete this;
@@ -140,9 +148,9 @@ namespace XBMCAddon
     {
 #ifdef LOG_LIFECYCLE_EVENTS
       CLog::Log(LOGDEBUG,"NEWADDON REFCNT incrementing to %ld on %s 0x%lx", 
-                AtomicIncrement((long*)&refs),classname.c_str(), (long)(((void*)this)));
+                ++refs, GetClassname(), (long)(((void*)this)));
 #else
-      AtomicIncrement((long*)&refs);
+      ++refs;
 #endif
     }
 #else
@@ -166,7 +174,7 @@ namespace XBMCAddon
 
       /**
        * operator= should work with either another smart pointer or a pointer since it will
-       * be able to convert a pointer to a smart pointer using one of the above constuctors.
+       * be able to convert a pointer to a smart pointer using one of the above constructors.
        *
        * Note: There is a trick here. The temporary variable is necessary because otherwise the
        * following code will fail:
@@ -205,22 +213,6 @@ namespace XBMCAddon
       template<class O> inline void reset(Ref<O> const & oref) { refcheck; (*this) = static_cast<T*>(oref.get()); refcheck; }
       template<class O> inline void reset(O * oref) { refcheck; (*this) = static_cast<T*>(oref); refcheck; }
       inline void reset() { refcheck; if (ac) ac->Release(); ac = NULL; }
-    };
-
-    /**
-     * This class can be used like a "synchronize" block in java as long
-     *  as the object is an AddonClass. It can be used to synchronize on
-     *  'this' effectively creating the effect of a synchronize keyword
-     *  on a method declaration.
-     *
-     * Keep in mind that this DOES NOT use 'monitor' semantics, but 
-     *  uses MUTEX semantics. That means that using this class, a thread
-     *  can deadlock itself, while in java a synchronize keyword won't.
-     */
-    class Synchronize : public CSingleLock
-    {
-    public:
-      inline Synchronize(const AddonClass& obj) : CSingleLock(obj.thisLock) {}
     };
 
   };

@@ -31,9 +31,10 @@ class CAndroidAppDirectory :
 public:
   CAndroidAppDirectory(void);
   virtual ~CAndroidAppDirectory(void);
-  virtual bool GetDirectory(const CStdString& strPath, CFileItemList &items);
-  virtual bool Exists(const char* strPath) { return true; };
-  virtual bool IsAllowed(const CStdString& strFile) const;
+  virtual bool GetDirectory(const CURL& url, CFileItemList &items) override;
+  virtual bool Exists(const CURL& url) override { return true; };
+  virtual bool AllowAll() const override { return true; };
+  virtual DIR_CACHE_TYPE GetCacheType(const CURL& url) const override { return DIR_CACHE_NEVER; }
 };
 }
 #endif

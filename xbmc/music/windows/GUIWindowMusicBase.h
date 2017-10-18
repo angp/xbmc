@@ -23,9 +23,10 @@
  *
  */
 
+#include <vector>
+
 #include "windows/GUIMediaWindow.h"
 #include "music/MusicDatabase.h"
-#include "music/tags/MusicInfoTagLoaderFactory.h"
 #include "music/infoscanner/MusicInfoScraper.h"
 #include "PlayListPlayer.h"
 #include "music/MusicInfoLoader.h"
@@ -38,49 +39,58 @@
  CGUIWindowMusicBase is the base class for
  all music windows.
  */
-class CGUIWindowMusicBase : public CGUIMediaWindow
+class CGUIWindowMusicBase : public CGUIMediaWindow, public IBackgroundLoaderObserver
 {
 public:
-  CGUIWindowMusicBase(int id, const CStdString &xmlFile);
-  virtual ~CGUIWindowMusicBase(void);
-  virtual bool OnMessage(CGUIMessage& message);
-  virtual bool OnAction(const CAction &action);
-  virtual bool OnBack(int actionID);
+  CGUIWindowMusicBase(int id, const std::string &xmlFile);
+  ~CGUIWindowMusicBase(void) override;
+  bool OnMessage(CGUIMessage& message) override;
+  bool OnAction(const CAction &action) override;
+  bool OnBack(int actionID) override;
 
-  void OnInfo(CFileItem *pItem, bool bShowInfo = false);
+  void OnItemInfo(CFileItem *pItem, bool bShowInfo = false);
 
+  void DoScan(const std::string &strPath);
+
+  /*! \brief Prompt the user if he wants to start a scan for this folder
+  \param path the path to assign content for
+  */
+  static void OnAssignContent(const std::string &path);
 protected:
-  virtual void OnInitWindow();
+  void OnInitWindow() override;
   /*!
   \brief Will be called when an popup context menu has been asked for
   \param itemNumber List/thumb control item that has been clicked on
   */
-  virtual void GetContextButtons(int itemNumber, CContextButtons &buttons);
+  void GetContextButtons(int itemNumber, CContextButtons &buttons) override;
   void GetNonContextButtons(CContextButtons &buttons);
-  virtual bool OnContextButton(int itemNumber, CONTEXT_BUTTON button);
+  bool OnContextButton(int itemNumber, CONTEXT_BUTTON button) override;
+  bool OnAddMediaSource() override;
   /*!
   \brief Overwrite to update your gui buttons (visible, enable,...)
   */
-  virtual void UpdateButtons();
+  void UpdateButtons() override;
 
-  virtual bool GetDirectory(const CStdString &strDirectory, CFileItemList &items);
+  bool GetDirectory(const std::string &strDirectory, CFileItemList &items) override;
   virtual void OnRetrieveMusicInfo(CFileItemList& items);
+  void OnPrepareFileItems(CFileItemList &items) override;
   void AddItemToPlayList(const CFileItemPtr &pItem, CFileItemList &queuedItems);
-  virtual void OnScan(int iItem) {};
   void OnRipCD();
-  virtual void OnPrepareFileItems(CFileItemList &items);
-  virtual CStdString GetStartFolder(const CStdString &dir);
+  std::string GetStartFolder(const std::string &dir) override;
+  void OnItemLoaded(CFileItem* pItem) override {}
 
-  virtual bool CheckFilterAdvanced(CFileItemList &items) const;
-  virtual bool CanContainFilter(const CStdString &strDirectory) const;
+  virtual void OnScan(int iItem);
+
+  bool CheckFilterAdvanced(CFileItemList &items) const override;
+  bool CanContainFilter(const std::string &strDirectory) const override;
 
   // new methods
   virtual void PlayItem(int iItem);
-  virtual bool OnPlayMedia(int iItem);
+  bool OnPlayMedia(int iItem, const std::string &player = "") override;
 
   void RetrieveMusicInfo();
-  void OnInfo(int iItem, bool bShowInfo = true);
-  void OnInfoAll(int iItem, bool bCurrent=false, bool refresh=false);
+  void OnItemInfo(int iItem, bool bShowInfo = true);
+  void OnItemInfoAll(const std::string strPath, bool refresh = false);
   virtual void OnQueueItem(int iItem);
   enum ALLOW_SELECTION { SELECTION_ALLOWED = 0, SELECTION_AUTO, SELECTION_FORCED };
   bool FindAlbumInfo(const CFileItem* album, MUSIC_GRABBER::CMusicAlbumInfo& albumInfo, ALLOW_SELECTION allowSelection);
@@ -89,17 +99,18 @@ protected:
   bool ShowAlbumInfo(const CFileItem *pItem, bool bShowInfo = true);
   void ShowArtistInfo(const CFileItem *pItem, bool bShowInfo = true);
   void ShowSongInfo(CFileItem* pItem);
-  void UpdateThumb(const CAlbum &album, const CStdString &path);
+  void UpdateThumb(const CAlbum &album, const std::string &path);
 
   void OnRipTrack(int iItem);
   void OnSearch();
-  virtual void LoadPlayList(const CStdString& strPlayList);
+  void LoadPlayList(const std::string& strPlayList) override;
+  virtual void OnRemoveSource(int iItem);
 
   typedef std::vector <CFileItem*>::iterator ivecItems; ///< CFileItem* vector Iterator
   CGUIDialogProgress* m_dlgProgress; ///< Progress dialog
 
-  // member variables to save frequently used CSettings (which is slow)
-  bool m_hideExtensions;
   CMusicDatabase m_musicdatabase;
   MUSIC_INFO::CMusicInfoLoader m_musicInfoLoader;
+
+  CMusicThumbLoader m_thumbLoader;
 };

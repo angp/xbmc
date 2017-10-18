@@ -20,13 +20,11 @@
  *
  */
 
-#include "windowing/WinEvents.h"
+#include "windowing/osx/WinEventsSDL.h"
 
-class CWinEventsOSX : public CWinEventsBase
+class CWinEventsOSX : public CWinEventsSDL
 {
 public:
   CWinEventsOSX();
   ~CWinEventsOSX();
-
-  static bool MessagePump();
 };

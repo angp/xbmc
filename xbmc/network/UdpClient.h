@@ -23,7 +23,8 @@
  *
  */
 
-#include "utils/StdString.h"
+#include <string>
+#include <vector>
 #include "threads/Thread.h"
 #include "threads/CriticalSection.h"
 #include <sys/socket.h>
@@ -34,29 +35,29 @@ class CUdpClient : CThread
 {
 public:
   CUdpClient();
-  virtual ~CUdpClient(void);
+  ~CUdpClient(void) override;
 
 protected:
 
   bool Create();
   void Destroy();
 
-  void OnStartup();
-  void Process();
+  void OnStartup() override;
+  void Process() override;
 
-  bool Broadcast(int aPort, CStdString& aMessage);
-  bool Send(CStdString aIpAddress, int aPort, CStdString& aMessage);
-  bool Send(SOCKADDR_IN aAddress, CStdString& aMessage);
+  bool Broadcast(int aPort, const std::string& aMessage);
+  bool Send(const std::string& aIpAddress, int aPort, const std::string& aMessage);
+  bool Send(SOCKADDR_IN aAddress, const std::string& aMessage);
   bool Send(SOCKADDR_IN aAddress, LPBYTE pMessage, DWORD dwSize);
 
-  virtual void OnMessage(SOCKADDR_IN& aRemoteAddress, CStdString& aMessage, LPBYTE pMessage, DWORD dwMessageLength){};
+  virtual void OnMessage(SOCKADDR_IN& aRemoteAddress, const std::string& aMessage, LPBYTE pMessage, DWORD dwMessageLength){};
 
 protected:
 
   struct UdpCommand
   {
     SOCKADDR_IN address;
-    CStdString message;
+    std::string message;
     LPBYTE binary;
     DWORD binarySize;
   };

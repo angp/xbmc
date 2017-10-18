@@ -20,6 +20,7 @@
  */
 
 #include <algorithm>
+#include "AEAudioFormat.h"
 
 class CAELimiter
 {
@@ -35,7 +36,7 @@ class CAELimiter
 
     void SetAmplification(float amplify)
     {
-      m_amplify = std::max(std::min(amplify, 1000.0f), 1.0f);
+      m_amplify = std::max(std::min(amplify, 1000.0f), 0.0f);
     }
 
     float GetAmplification()
@@ -48,5 +49,5 @@ class CAELimiter
       m_samplerate = (float)samplerate;
     }
 
-    float Run(float* frame, int channels);
+    float Run(float* frame[AE_CH_MAX], int channels, int offset = 0, bool planar = false);
 };

@@ -22,23 +22,18 @@
 #include "UPnPDirectory.h"
 #include "FileFactory.h"
 #include "FileItem.h"
-#include "utils/log.h"
 #include "URL.h"
 
 using namespace XFILE;
 
-CUPnPFile::CUPnPFile()
-{
-}
+CUPnPFile::CUPnPFile() = default;
 
-CUPnPFile::~CUPnPFile()
-{
-}
+CUPnPFile::~CUPnPFile() = default;
 
 bool CUPnPFile::Open(const CURL& url)
 {
   CFileItem item_new;
-  if (CUPnPDirectory::GetResource(url.Get(), item_new))
+  if (CUPnPDirectory::GetResource(url, item_new))
   {
     //CLog::Log(LOGDEBUG,"FileUPnP - file redirect to %s.", item_new.GetPath().c_str());
     IFile *pNewImp = CFileFactory::CreateLoader(item_new.GetPath());    
@@ -47,7 +42,7 @@ bool CUPnPFile::Open(const CURL& url)
     {
       throw new CRedirectException(pNewImp, pNewUrl);
     }
-    SAFE_DELETE(pNewUrl);    
+    delete pNewUrl;    
   }
   return false;
 }
@@ -55,7 +50,7 @@ bool CUPnPFile::Open(const CURL& url)
 int CUPnPFile::Stat(const CURL& url, struct __stat64* buffer)
 {
   CFileItem item_new;
-  if (CUPnPDirectory::GetResource(url.Get(), item_new))
+  if (CUPnPDirectory::GetResource(url, item_new))
   {
     //CLog::Log(LOGDEBUG,"FileUPnP - file redirect to %s.", item_new.GetPath().c_str());
     IFile *pNewImp = CFileFactory::CreateLoader(item_new.GetPath());
@@ -64,7 +59,7 @@ int CUPnPFile::Stat(const CURL& url, struct __stat64* buffer)
     {
       throw new CRedirectException(pNewImp, pNewUrl);
     }
-    SAFE_DELETE(pNewUrl);
+    delete pNewUrl;
   }
   return -1;
 }
@@ -72,7 +67,7 @@ int CUPnPFile::Stat(const CURL& url, struct __stat64* buffer)
 bool CUPnPFile::Exists(const CURL& url)
 {
   CFileItem item_new;
-  if (CUPnPDirectory::GetResource(url.Get(), item_new))
+  if (CUPnPDirectory::GetResource(url, item_new))
   {
     //CLog::Log(LOGDEBUG,"FileUPnP - file redirect to %s.", item_new.GetPath().c_str());
     IFile *pNewImp = CFileFactory::CreateLoader(item_new.GetPath());
@@ -81,7 +76,7 @@ bool CUPnPFile::Exists(const CURL& url)
     {
       throw new CRedirectException(pNewImp, pNewUrl);
     }
-    SAFE_DELETE(pNewUrl);
+    delete pNewUrl;
   }
   return false;
 }

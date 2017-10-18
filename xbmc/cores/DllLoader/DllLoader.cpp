@@ -18,6 +18,9 @@
  *
  */
 
+#include <stdlib.h>
+#include <algorithm>
+
 #include "DllLoader.h"
 #include "DllLoaderContainer.h"
 #include "filesystem/SpecialProtocol.h"
@@ -46,7 +49,7 @@ extern "C" FILE *fopen_utf8(const char *_Filename, const char *_Mode);
 #endif
 
 //  Entry point of a dll (DllMain)
-typedef BOOL (APIENTRY *EntryFunc)(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved);
+typedef int (APIENTRY *EntryFunc)(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved);
 
 
 #ifdef TARGET_POSIX
@@ -101,11 +104,6 @@ DllLoader::DllLoader(const char *sDll, bool bTrack, bool bSystemDll, bool bLoadS
   if (m_bSystemDll)
     hModule = (HMODULE)this;
 
-  if (stricmp(sDll, "special://xbmcbin/system/python/python24.dll")==0 ||
-      strstr(sDll, ".pyd") != NULL)
-  {
-    m_bLoadSymbols=true;
-  }
 }
 
 DllLoader::~DllLoader()
@@ -149,7 +147,7 @@ int DllLoader::Parse()
 {
   int iResult = 0;
 
-  CStdString strFileName= GetFileName();
+  std::string strFileName= GetFileName();
   FILE* fp = fopen_utf8(CSpecialProtocol::TranslatePath(strFileName).c_str(), "rb");
 
   if (fp)
@@ -295,9 +293,9 @@ int DllLoader::ResolveImports(void)
             Imp->Name_RVA != 0 ||
             Imp->ImportAddressTable_RVA != 0)
     {
-      char *Name = (char*)RVA2Data(Imp->Name_RVA);
+      const char *Name = (const char*)RVA2Data(Imp->Name_RVA);
 
-      char* FileName=ResolveReferencedDll(Name);
+      const char* FileName=ResolveReferencedDll(Name);
       //  If possible use the dll name WITH path to resolve exports. We could have loaded
       //  a dll with the same name as another dll but from a different directory
       if (FileName) Name=FileName;
@@ -355,9 +353,9 @@ int DllLoader::ResolveImports(void)
   return bResult;
 }
 
-char* DllLoader::ResolveReferencedDll(char* dll)
+const char* DllLoader::ResolveReferencedDll(const char* dll)
 {
-  DllLoader* pDll = (DllLoader*) DllLoaderContainer::LoadModule(dll, GetPath(), m_bLoadSymbols);
+  DllLoader* pDll = static_cast<DllLoader*>(DllLoaderContainer::LoadModule(dll, GetPath(), m_bLoadSymbols));
 
   if (!pDll)
   {
@@ -385,8 +383,8 @@ int DllLoader::LoadExports()
     PrintExportTable(ExportDirTable);
 #endif
 
-    // TODO - Validate all pointers are valid. Is a zero RVA valid or not? I'd guess not as it would
-    // point to the coff file header, thus not right.
+    //! @todo Validate all pointers are valid. Is a zero RVA valid or not? I'd guess not as it would
+    //! point to the coff file header, thus not right.
 
     unsigned long *ExportAddressTable = (unsigned long*)RVA2Data(ExportDirTable->ExportAddressTable_RVA);
     unsigned long *NamePointerTable = (unsigned long*)RVA2Data(ExportDirTable->NamePointerTable_RVA);
@@ -416,7 +414,7 @@ int DllLoader::ResolveExport(const char *sName, void **pAddr, bool logging)
     return 1;
   }
 
-  char* sDllName = strrchr(GetFileName(), '\\');
+  const char* sDllName = strrchr(GetFileName(), '\\');
   if (sDllName) sDllName += 1;
   else sDllName = GetFileName();
 
@@ -439,7 +437,7 @@ int DllLoader::ResolveOrdinal(unsigned long ordinal, void **pAddr)
     return 1;
   }
 
-  char* sDllName = strrchr(GetFileName(), '\\');
+  const char* sDllName = strrchr(GetFileName(), '\\');
   if (sDllName) sDllName += 1;
   else sDllName = GetFileName();
 
@@ -501,9 +499,9 @@ Export* DllLoader::GetExportByFunctionName(const char* sFunctionName)
   return NULL;
 }
 
-int DllLoader::ResolveOrdinal(char *sName, unsigned long ordinal, void **fixup)
+int DllLoader::ResolveOrdinal(const char *sName, unsigned long ordinal, void **fixup)
 {
-  DllLoader* pDll = (DllLoader*) DllLoaderContainer::GetModule(sName);
+  DllLoader* pDll = static_cast<DllLoader*>(DllLoaderContainer::GetModule(sName));
 
   if (pDll)
   {
@@ -522,9 +520,9 @@ int DllLoader::ResolveOrdinal(char *sName, unsigned long ordinal, void **fixup)
   return 0;
 }
 
-int DllLoader::ResolveName(char *sName, char* sFunction, void **fixup)
+int DllLoader::ResolveName(const char *sName, char* sFunction, void **fixup)
 {
-  DllLoader* pDll = (DllLoader*) DllLoaderContainer::GetModule(sName);
+  DllLoader* pDll = static_cast<DllLoader*>(DllLoaderContainer::GetModule(sName));
 
   if (pDll)
   {
@@ -545,6 +543,8 @@ int DllLoader::ResolveName(char *sName, char* sFunction, void **fixup)
 void DllLoader::AddExport(unsigned long ordinal, void* function, void* track_function)
 {
   ExportEntry* entry = (ExportEntry*)malloc(sizeof(ExportEntry));
+  if (!entry)
+    return;
   entry->exp.function = function;
   entry->exp.ordinal = ordinal;
   entry->exp.track_function = track_function;
@@ -559,6 +559,8 @@ void DllLoader::AddExport(char* sFunctionName, unsigned long ordinal, void* func
   int len = sizeof(ExportEntry);
 
   ExportEntry* entry = (ExportEntry*)malloc(len + strlen(sFunctionName) + 1);
+  if (!entry)
+    return;
   entry->exp.function = function;
   entry->exp.ordinal = ordinal;
   entry->exp.track_function = track_function;
@@ -574,6 +576,8 @@ void DllLoader::AddExport(char* sFunctionName, void* function, void* track_funct
   int len = sizeof(ExportEntry);
 
   ExportEntry* entry = (ExportEntry*)malloc(len + strlen(sFunctionName) + 1);
+  if (!entry)
+    return;
   entry->exp.function = (void*)function;
   entry->exp.ordinal = -1;
   entry->exp.track_function = track_function;
@@ -802,7 +806,7 @@ void DllLoader::UnloadSymbols()
   RtlInitAnsiString(&name, GetName());
   InitializeObjectAttributes(&attributes, &name, OBJ_CASE_INSENSITIVE, NULL);
 
-  // Try to unload the sybols from vs.net debugger
+  // Try to unload the symbols from vs.net debugger
   DbgUnLoadImageSymbols(&name, (ULONG)hModule, 0xFFFFFFFF);
 
   LPVOID pBaseAddress=GetXbdmBaseAddress();
@@ -822,7 +826,7 @@ void DllLoader::UnloadSymbols()
 
       try
       {
-        CStdStringW strNameW;
+        std::wstring strNameW;
         g_charsetConverter.utf8ToW(GetName(), strNameW);
 
         // Get the address of the global struct g_dmi
@@ -835,8 +839,8 @@ void DllLoader::UnloadSymbols()
         //  Search for the dll we are unloading...
         while (entry)
         {
-          CStdStringW baseName=(wchar_t*)((LDR_DATA_TABLE_ENTRY*)entry)->BaseDllName.Buffer;
-          if (baseName.Equals(strNameW))
+          std::wstring baseName=(wchar_t*)((LDR_DATA_TABLE_ENTRY*)entry)->BaseDllName.Buffer;
+          if (baseName == strNameW)
           {
             // ...and remove it from the LoadedModuleList and free its memory.
             LIST_ENTRY* back=entry->Blink;

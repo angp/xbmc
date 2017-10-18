@@ -21,16 +21,10 @@
 #pragma once
 
 #include <string>
-#include "config.h"
 
 namespace XBMCAddon
 {
-#ifdef UNICODE
-#error "Unicode set"
-  typedef std::basic_string<wchar_t> String;
-#else
   typedef std::string String;
-#endif
 
   extern String emptyString;
 }

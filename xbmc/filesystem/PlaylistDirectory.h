@@ -28,8 +28,8 @@ namespace XFILE
   {
   public:
     CPlaylistDirectory(void);
-    virtual ~CPlaylistDirectory(void);
-    virtual bool GetDirectory(const CStdString& strPath, CFileItemList &items);
-    virtual bool IsAllowed(const CStdString &strFile) const { return true; };
+    ~CPlaylistDirectory(void) override;
+    bool GetDirectory(const CURL& url, CFileItemList &items) override;
+    bool AllowAll() const override { return true; }
   };
 }

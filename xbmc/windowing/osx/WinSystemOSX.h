@@ -22,56 +22,73 @@
 
 #if defined(TARGET_DARWIN_OSX)
 
+#include <string>
+#include <vector>
+
 #include "windowing/WinSystem.h"
 #include "threads/CriticalSection.h"
+#include "threads/Timer.h"
 
 typedef struct SDL_Surface SDL_Surface;
 
 class IDispResource;
 class CWinEventsOSX;
 
-class CWinSystemOSX : public CWinSystemBase
+class CWinSystemOSX : public CWinSystemBase, public ITimerCallback
 {
 public:
+
   CWinSystemOSX();
   virtual ~CWinSystemOSX();
 
+  // ITimerCallback interface
+  virtual void OnTimeout() override;
+
   // CWinSystemBase
-  virtual bool InitWindowSystem();
-  virtual bool DestroyWindowSystem();
-  virtual bool CreateNewWindow(const CStdString& name, bool fullScreen, RESOLUTION_INFO& res, PHANDLE_EVENT_FUNC userFunction);
-  virtual bool DestroyWindow();
-  virtual bool ResizeWindow(int newWidth, int newHeight, int newLeft, int newTop);
-  virtual bool SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool blankOtherDisplays);
-  virtual void UpdateResolutions();
-  virtual void NotifyAppFocusChange(bool bGaining);
-  virtual void ShowOSMouse(bool show);
-  virtual bool Minimize();
-  virtual bool Restore();
-  virtual bool Hide();
-  virtual bool Show(bool raise = true);
-  virtual void OnMove(int x, int y);
+  virtual bool InitWindowSystem() override;
+  virtual bool DestroyWindowSystem() override;
+  virtual bool CreateNewWindow(const std::string& name, bool fullScreen, RESOLUTION_INFO& res) override;
+  virtual bool DestroyWindow() override;
+  virtual bool ResizeWindow(int newWidth, int newHeight, int newLeft, int newTop) override;
+  bool         ResizeWindowInternal(int newWidth, int newHeight, int newLeft, int newTop, void *additional);
+  virtual bool SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool blankOtherDisplays) override;
+  virtual void UpdateResolutions() override;
+  virtual void NotifyAppFocusChange(bool bGaining) override;
+  virtual void ShowOSMouse(bool show) override;
+  virtual bool Minimize() override;
+  virtual bool Restore() override;
+  virtual bool Hide() override;
+  virtual bool Show(bool raise = true) override;
+  virtual void OnMove(int x, int y) override;
 
-  virtual void EnableSystemScreenSaver(bool bEnable);
-  virtual bool IsSystemScreenSaverEnabled();
-  virtual void ResetOSScreensaver();
-  virtual bool EnableFrameLimiter();
+  virtual void EnableTextInput(bool bEnable) override;
+  virtual bool IsTextInputEnabled() override;
 
-  virtual void EnableTextInput(bool bEnable);
-  virtual bool IsTextInputEnabled();
+  virtual std::string GetClipboardText(void) override;
 
-  virtual void Register(IDispResource *resource);
-  virtual void Unregister(IDispResource *resource);
+  void Register(IDispResource *resource);
+  void Unregister(IDispResource *resource);
   
-  virtual int GetNumScreens();
+  virtual int GetNumScreens() override;
+  virtual int GetCurrentScreen() override;
 
-  void CheckDisplayChanging(u_int32_t flags);
+  virtual std::unique_ptr<CVideoSync> GetVideoSync(void *clock) override;
+  
+  void        WindowChangedScreen();
+
+  void        AnnounceOnLostDevice();
+  void        AnnounceOnResetDevice();
+  void        HandleOnResetDevice();
+  void        StartLostDeviceTimer();
+  void        StopLostDeviceTimer();
   
   void* GetCGLContextObj();
-
-  std::string GetClipboardText(void);
+  void* GetNSOpenGLContext();
 
 protected:
+  virtual std::unique_ptr<KODI::WINDOWING::IOSScreenSaver> GetOSScreenSaverImpl() override;
+  
+  void  HandlePossibleRefreshrateChange();
   void* CreateWindowedContext(void* shareCtx);
   void* CreateFullScreenContext(int screen_index, void* shareCtx);
   void  GetScreenResolution(int* w, int* h, double* fps, int screenIdx);
@@ -90,13 +107,19 @@ protected:
   bool                         m_obscured;
   unsigned int                 m_obscured_timecheck;
 
-  bool                         m_use_system_screensaver;
   bool                         m_can_display_switch;
+  bool                         m_movedToOtherScreen;
+  int                          m_lastDisplayNr;
   void                        *m_windowDidMove;
   void                        *m_windowDidReSize;
+  void                        *m_windowChangedScreen;
+  double                       m_refreshRate;
 
   CCriticalSection             m_resourceSection;
   std::vector<IDispResource*>  m_resources;
+  CTimer                       m_lostDeviceTimer;
+  bool                         m_delayDispReset;
+  XbmcThreads::EndTime         m_dispResetTimer;
 };
 
 #endif

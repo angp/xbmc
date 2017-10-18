@@ -25,15 +25,15 @@
 #include "threads/CriticalSection.h"
 
 #include <vector>
-#include "boost/shared_ptr.hpp"
+#include <memory>
 
-class CFileItem; typedef boost::shared_ptr<CFileItem> CFileItemPtr;
+class CFileItem; typedef std::shared_ptr<CFileItem> CFileItemPtr;
 class CFileItemList;
 
 class IBackgroundLoaderObserver
 {
 public:
-  virtual ~IBackgroundLoaderObserver() {}
+  virtual ~IBackgroundLoaderObserver() = default;
   virtual void OnItemLoaded(CFileItem* pItem) = 0;
 };
 
@@ -41,11 +41,11 @@ class CBackgroundInfoLoader : public IRunnable
 {
 public:
   CBackgroundInfoLoader();
-  virtual ~CBackgroundInfoLoader();
+  ~CBackgroundInfoLoader() override;
 
   void Load(CFileItemList& items);
   bool IsLoading();
-  virtual void Run();
+  void Run() override;
   void SetObserver(IBackgroundLoaderObserver* pObserver);
   void SetProgressCallback(IProgressCallback* pCallback);
   virtual bool LoadItem(CFileItem* pItem) { return false; };

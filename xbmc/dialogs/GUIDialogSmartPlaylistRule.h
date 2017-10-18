@@ -28,14 +28,13 @@ class CGUIDialogSmartPlaylistRule :
 {
 public:
   CGUIDialogSmartPlaylistRule(void);
-  virtual ~CGUIDialogSmartPlaylistRule(void);
-  virtual bool OnMessage(CGUIMessage& message);
-  virtual bool OnBack(int actionID);
-  virtual void OnInitWindow();
-  virtual void OnWindowLoaded();
-  virtual void OnDeinitWindow(int nextWindowID);
+  ~CGUIDialogSmartPlaylistRule(void) override;
+  bool OnMessage(CGUIMessage& message) override;
+  bool OnBack(int actionID) override;
+  void OnInitWindow() override;
+  void OnDeinitWindow(int nextWindowID) override;
 
-  static bool EditRule(CSmartPlaylistRule &rule, const CStdString& type="songs");
+  static bool EditRule(CSmartPlaylistRule &rule, const std::string& type="songs");
 
 protected:
   void OnField();
@@ -43,10 +42,9 @@ protected:
   void OnOK();
   void OnCancel();
   void UpdateButtons();
-  void AddOperatorLabel(CSmartPlaylistRule::SEARCH_OPERATOR op);
   void OnBrowse();
-
+  std::vector< std::pair<std::string, int> > GetValidOperators(const CSmartPlaylistRule& rule);
   CSmartPlaylistRule m_rule;
   bool m_cancelled;
-  CStdString m_type;
+  std::string m_type;
 };

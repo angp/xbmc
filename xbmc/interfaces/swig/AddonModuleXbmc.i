@@ -21,6 +21,13 @@
 %module(directors="1") xbmc
 
 %{
+#if defined(TARGET_WINDOWS)
+#  if !defined(WIN32_LEAN_AND_MEAN)
+#    define WIN32_LEAN_AND_MEAN
+#  endif
+#  include <windows.h>
+#endif
+
 #include "interfaces/legacy/Player.h"
 #include "interfaces/legacy/RenderCapture.h"
 #include "interfaces/legacy/Keyboard.h"
@@ -44,68 +51,10 @@ using namespace xbmc;
 
 %feature("python:coerceToUnicode") XBMCAddon::xbmc::getLocalizedString "true"
 
+%include "interfaces/legacy/AddonString.h"
 %include "interfaces/legacy/ModuleXbmc.h"
 
 %feature("director") Player;
-
-%feature("python:method:play") Player
-{
-    TRACE;
-    PyObject *pObject = NULL;
-    PyObject *pObjectListItem = NULL;
-    char bWindowed = false;
-    static const char *keywords[] = { "item", "listitem", "windowed", NULL };
-
-    if (!PyArg_ParseTupleAndKeywords(
-      args,
-      kwds,
-      (char*)"|OOb",
-      (char**)keywords,
-      &pObject,
-      &pObjectListItem,
-      &bWindowed))
-    {
-      return NULL;
-    }
-
-    try
-    {
-      Player* player = ((Player*)retrieveApiInstance((PyObject*)self,&PyXBMCAddon_xbmc_Player_Type,"play","XBMCAddon::xbmc::Player"));
-
-      // set fullscreen or windowed
-      bool windowed = (0 != bWindowed);
-
-      if (pObject == NULL)
-        player->playCurrent(windowed);
-      else if ((PyString_Check(pObject) || PyUnicode_Check(pObject)))
-      {
-        CStdString item;
-        PyXBMCGetUnicodeString(item,pObject,"item","Player::play");
-        XBMCAddon::xbmcgui::ListItem* pListItem = 
-          (pObjectListItem ? 
-           (XBMCAddon::xbmcgui::ListItem *)retrieveApiInstance(pObjectListItem,"p.XBMCAddon::xbmcgui::ListItem","XBMCAddon::xbmc::","play") :
-           NULL);
-        player->playStream(item,pListItem,windowed);
-      }
-      else // pObject must be a playlist
-        player->playPlaylist((PlayList *)retrieveApiInstance(pObject,"p.XBMCAddon::xbmc::PlayList","XBMCAddon::xbmc::","play"), windowed);
-    }
-    catch (const XbmcCommons::Exception& e)
-    { 
-      CLog::Log(LOGERROR,"Leaving Python method 'XBMCAddon_xbmc_Player_play'. Exception from call to 'play' '%s' ... returning NULL", e.GetMessage());
-      PyErr_SetString(PyExc_RuntimeError, e.GetMessage()); 
-      return NULL; 
-    }
-    catch (...)
-    {
-      CLog::Log(LOGERROR,"Unknown exception thrown from the call 'play'");
-      PyErr_SetString(PyExc_RuntimeError, "Unknown exception thrown from the call 'play'"); 
-      return NULL; 
-    }
-
-    Py_INCREF(Py_None);
-    return Py_None;
-  }
 
 %feature("python:nokwds") XBMCAddon::xbmc::Keyboard::Keyboard "true"
 %feature("python:nokwds") XBMCAddon::xbmc::Player::Player "true"
@@ -116,6 +65,7 @@ using namespace xbmc;
 %include "interfaces/legacy/RenderCapture.h"
 
 %include "interfaces/legacy/InfoTagMusic.h"
+%include "interfaces/legacy/InfoTagRadioRDS.h"
 %include "interfaces/legacy/InfoTagVideo.h"
 %include "interfaces/legacy/Keyboard.h"
 %include "interfaces/legacy/PlayList.h"

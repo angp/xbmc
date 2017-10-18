@@ -18,6 +18,10 @@
  *  <http://www.gnu.org/licenses/>.
  *
  */
+
+#include <string>
+#include <vector>
+
 #include "storage/IStorageProvider.h"
 #ifdef HAS_DBUS
 #include "DBusUtil.h"
@@ -26,7 +30,7 @@ class CUDiskDevice
 {
 public:
   CUDiskDevice(const char *DeviceKitUDI);
-  ~CUDiskDevice() { }
+  ~CUDiskDevice() = default;
 
   void Update();
 
@@ -35,43 +39,43 @@ public:
 
   bool IsApproved();
 
-  CStdString toString();
+  std::string toString();
 
   CMediaSource ToMediaShare();
 
-  CStdString m_UDI, m_DeviceKitUDI, m_MountPath, m_FileSystem, m_Label;
+  std::string m_UDI, m_DeviceKitUDI, m_MountPath, m_FileSystem, m_Label;
   bool m_isMounted, m_isMountedByUs, m_isRemovable, m_isPartition, m_isFileSystem, m_isSystemInternal, m_isOptical;
-  float m_PartitionSizeGiB;
+  int64_t m_PartitionSize;
 };
 
 class CUDisksProvider : public IStorageProvider
 {
 public:
   CUDisksProvider();
-  virtual ~CUDisksProvider();
+  ~CUDisksProvider() override;
 
-  virtual void Initialize();
-  virtual void Stop() { }
+  void Initialize() override;
+  void Stop() override { }
 
-  virtual void GetLocalDrives(VECSOURCES &localDrives) { GetDisks(localDrives, false); }
-  virtual void GetRemovableDrives(VECSOURCES &removableDrives) { GetDisks(removableDrives, true); }
+  void GetLocalDrives(VECSOURCES &localDrives) override { GetDisks(localDrives, false); }
+  void GetRemovableDrives(VECSOURCES &removableDrives) override { GetDisks(removableDrives, true); }
 
-  virtual bool Eject(CStdString mountpath);
+  bool Eject(const std::string& mountpath) override;
 
-  virtual std::vector<CStdString> GetDiskUsage();
+  std::vector<std::string> GetDiskUsage() override;
 
-  virtual bool PumpDriveChangeEvents(IStorageEventsCallback *callback);
+  bool PumpDriveChangeEvents(IStorageEventsCallback *callback) override;
 
   static bool HasUDisks();
 private:
-  typedef std::map<CStdString, CUDiskDevice *> DeviceMap;
-  typedef std::pair<CStdString, CUDiskDevice *> DevicePair;
+  typedef std::map<std::string, CUDiskDevice *> DeviceMap;
+  typedef std::pair<std::string, CUDiskDevice *> DevicePair;
 
   void DeviceAdded(const char *object, IStorageEventsCallback *callback);
   void DeviceRemoved(const char *object, IStorageEventsCallback *callback);
   void DeviceChanged(const char *object, IStorageEventsCallback *callback);
 
-  std::vector<CStdString> EnumerateDisks();
+  std::vector<std::string> EnumerateDisks();
 
   void GetDisks(VECSOURCES& devices, bool EnumerateRemovable);
 
@@ -79,7 +83,6 @@ private:
 
   DeviceMap m_AvailableDevices;
 
-  DBusConnection *m_connection;
-  DBusError m_error;
+  CDBusConnection m_connection;
 };
 #endif

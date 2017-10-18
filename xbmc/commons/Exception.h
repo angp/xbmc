@@ -23,10 +23,11 @@
 //---------------------------------------------------------
 // This include should be moved to commons but even as it is,
 // it wont cause a linker circular dependency since it's just
-// a header. 
-#include "utils/StdString.h"
+// a header.
+#include "utils/StringUtils.h"
 //---------------------------------------------------------
 #include "ilog.h"
+#include <stdarg.h>
 
 #ifdef __GNUC__
 // The 'this' pointer counts as a parameter on member methods.
@@ -57,12 +58,12 @@ namespace XbmcCommons
   private:
 
     std::string classname;
-    CStdString message;
+    std::string message;
 
   protected:
     static ILogger* logger;
 
-    inline Exception(const char* classname_) : classname(classname_) { }
+    inline explicit Exception(const char* classname_) : classname(classname_) { }
     inline Exception(const char* classname_, const char* message_) : classname(classname_), message(message_) { }
     inline Exception(const Exception& other) : classname(other.classname), message(other.message) { }
 
@@ -72,7 +73,7 @@ namespace XbmcCommons
      */
     inline void Set(const char* fmt, va_list& argList)
     {
-      message.FormatV(fmt, argList);
+      message = StringUtils::FormatV(fmt, argList);
     }
 
     /**
@@ -104,7 +105,7 @@ namespace XbmcCommons
   /**
    * This class forms the base class for unchecked exceptions. Unchecked exceptions
    * are those that really shouldn't be handled explicitly. For example, on windows
-   * when a access violaton is converted to a win32_exception, there's nothing
+   * when a access violation is converted to a win32_exception, there's nothing
    * that can be done in most code. The outer most stack frame might try to 
    * do some error logging prior to shutting down, but that's really it.
    */

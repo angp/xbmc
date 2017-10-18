@@ -19,22 +19,31 @@
  *
  */
 
-#include "IHTTPRequestHandler.h"
+#include <string>
+
+#include "network/httprequesthandler/IHTTPRequestHandler.h"
 
 class CHTTPWebinterfaceAddonsHandler : public IHTTPRequestHandler
 {
 public:
-  CHTTPWebinterfaceAddonsHandler() { };
+  CHTTPWebinterfaceAddonsHandler() = default;
+  ~CHTTPWebinterfaceAddonsHandler() override = default;
   
-  virtual IHTTPRequestHandler* GetInstance() { return new CHTTPWebinterfaceAddonsHandler(); }
-  virtual bool CheckHTTPRequest(const HTTPRequest &request);
-  virtual int HandleHTTPRequest(const HTTPRequest &request);
+  IHTTPRequestHandler* Create(const HTTPRequest &request) const override { return new CHTTPWebinterfaceAddonsHandler(request); }
+  bool CanHandleRequest(const HTTPRequest &request) const override;
 
-  virtual void* GetHTTPResponseData() const { return (void *)m_response.c_str(); };
-  virtual size_t GetHTTPResonseDataLength() const { return m_response.size(); }
+  int HandleRequest() override;
 
-  virtual int GetPriority() const { return 1; }
+  HttpResponseRanges GetResponseData() const override;
+
+  int GetPriority() const override { return 4; }
+
+protected:
+  explicit CHTTPWebinterfaceAddonsHandler(const HTTPRequest &request)
+    : IHTTPRequestHandler(request)
+  { }
 
 private:
-  std::string m_response;
+  std::string m_responseData;
+  CHttpResponseRange m_responseRange;
 };

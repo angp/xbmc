@@ -25,6 +25,7 @@
 #include "threads/ThreadLocal.h"
 #include "threads/SingleLock.h"
 #include "commons/Exception.h"
+#include <stdlib.h>
 
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
@@ -84,10 +85,10 @@ void CThread::Create(bool bAutoDelete, unsigned stacksize)
 {
   if (m_ThreadId != 0)
   {
-    LOG(LOGERROR, "%s - fatal error creating thread- old thread id not null", __FUNCTION__);
+    LOG(LOGERROR, "%s - fatal error creating thread %s - old thread id not null", __FUNCTION__, m_ThreadName.c_str());
     exit(1);
   }
-  m_iLastTime = XbmcThreads::SystemClockMillis() * 10000;
+  m_iLastTime = XbmcThreads::SystemClockMillis() * 10000ULL;
   m_iLastUsage = 0;
   m_fLastUsage = 0.0f;
   m_bAutoDelete = bAutoDelete;
@@ -106,7 +107,7 @@ bool CThread::IsRunning() const
 
 THREADFUNC CThread::staticThread(void* data)
 {
-  CThread* pThread = (CThread*)(data);
+  CThread* pThread = static_cast<CThread*>(data);
   std::string name;
   ThreadIdentifier id;
   bool autodelete;
@@ -122,7 +123,7 @@ THREADFUNC CThread::staticThread(void* data)
 
   pThread->SetThreadInfo();
 
-  LOG(LOGNOTICE,"Thread %s start, auto delete: %s", name.c_str(), (autodelete ? "true" : "false"));
+  LOG(LOGDEBUG,"Thread %s start, auto delete: %s", name.c_str(), (autodelete ? "true" : "false"));
 
   currentThread.set(pThread);
   pThread->m_StartEvent.Set();
@@ -140,12 +141,12 @@ THREADFUNC CThread::staticThread(void* data)
 
   if (autodelete)
   {
-    LOG(LOGDEBUG,"Thread %s %"PRIu64" terminating (autodelete)", name.c_str(), (uint64_t)id);
+    LOG(LOGDEBUG,"Thread %s %" PRIu64" terminating (autodelete)", name.c_str(), (uint64_t)id);
     delete pThread;
     pThread = NULL;
   }
   else
-    LOG(LOGDEBUG,"Thread %s %"PRIu64" terminating", name.c_str(), (uint64_t)id);
+    LOG(LOGDEBUG,"Thread %s %" PRIu64" terminating", name.c_str(), (uint64_t)id);
 
   return 0;
 }
@@ -160,7 +161,7 @@ void CThread::StopThread(bool bWait /*= true*/)
   m_bStop = true;
   m_StopEvent.Set();
   CSingleLock lock(m_CriticalSection);
-  if (m_ThreadId && bWait)
+  if (m_ThreadId && bWait && !IsCurrentThread(m_ThreadId))
   {
     lock.Leave();
     WaitForThreadExit(0xFFFFFFFF);

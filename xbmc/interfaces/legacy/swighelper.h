@@ -32,7 +32,7 @@
  *  SWIGHIDDENVIRTUAL to 'hide' the polymorphic behavior from the scripting
  *  language using the macro instead.
  *
- * Note: You should not hide virtual destructors from the scripting langage.
+ * Note: You should not hide virtual destructors from the scripting language.
  */
 #ifdef SWIG
 #define SWIGHIDDENVIRTUAL 
@@ -96,5 +96,17 @@
 #define SWIG_CONSTANT2(type,var,val) %constant type var = val
 #else
 #define SWIG_CONSTANT2(type,var,val)
+#endif
+
+/**
+* SWIG_IMMUTABLE defines a member as immutable i.e. read-only.
+*
+* Note, this declaration is invisible to the API C++ code and can
+*  only be seen by the SWIG processor.
+*/
+#ifdef SWIG
+#define SWIG_IMMUTABLE(var) %feature("immutable"); var; %feature("immutable", "")
+#else
+#define SWIG_IMMUTABLE(var) var
 #endif
 

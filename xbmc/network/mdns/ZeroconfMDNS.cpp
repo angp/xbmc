@@ -19,6 +19,7 @@
  */
 
 #include "ZeroconfMDNS.h"
+#include <arpa/inet.h>
 
 #include <string>
 #include <sstream>
@@ -27,14 +28,12 @@
 #include "dialogs/GUIDialogKaiToast.h"
 #include "guilib/LocalizeStrings.h"
 #if defined(TARGET_WINDOWS)
-#include "win32/WIN32Util.h"
+#include "platform/win32/WIN32Util.h"
 #endif //TARGET_WINDOWS
 
 #if defined(HAS_MDNS_EMBEDDED)
 #include <mDnsEmbedded.h>
 #endif //HAS_MDNS_EMBEDDED
-
-#pragma comment(lib, "dnssd.lib")
 
 extern HWND g_hWnd;
 
@@ -51,7 +50,7 @@ void CZeroconfMDNS::Process()
 }
 
 
-CZeroconfMDNS::CZeroconfMDNS()  : CThread("ZerocconfEmbedded")
+CZeroconfMDNS::CZeroconfMDNS()  : CThread("ZeroconfEmbedded")
 {
   m_service = NULL;
 #if defined(HAS_MDNS_EMBEDDED)
@@ -99,6 +98,7 @@ bool CZeroconfMDNS::doPublishService(const std::string& fcr_identifier,
   TXTRecordCreate(&txtRecord, 0, NULL);
 
 #if !defined(HAS_MDNS_EMBEDDED)
+  CSingleLock lock(m_data_guard);
   if(m_service == NULL)
   {
     err = DNSServiceCreateConnection(&m_service);
@@ -143,12 +143,36 @@ bool CZeroconfMDNS::doPublishService(const std::string& fcr_identifier,
   else
   {
     CSingleLock lock(m_data_guard);
-    m_services.insert(make_pair(fcr_identifier, netService));
+    struct tServiceRef newService;
+    newService.serviceRef = netService;
+    newService.txtRecordRef = txtRecord;
+    newService.updateNumber = 0;
+    m_services.insert(make_pair(fcr_identifier, newService));
   }
 
-  TXTRecordDeallocate(&txtRecord);
-
   return err == kDNSServiceErr_NoError;
+}
+
+bool CZeroconfMDNS::doForceReAnnounceService(const std::string& fcr_identifier)
+{
+  bool ret = false;
+  CSingleLock lock(m_data_guard);
+  tServiceMap::iterator it = m_services.find(fcr_identifier);
+  if(it != m_services.end())
+  {
+    // for force announcing a service with mdns we need
+    // to change a txt record - so we diddle between
+    // even and odd dummy records here
+    if ( (it->second.updateNumber % 2) == 0)
+      TXTRecordSetValue(&it->second.txtRecordRef, "xbmcdummy", strlen("evendummy"), "evendummy");
+    else
+      TXTRecordSetValue(&it->second.txtRecordRef, "xbmcdummy", strlen("odddummy"), "odddummy");
+    it->second.updateNumber++;
+
+    if (DNSServiceUpdateRecord(it->second.serviceRef, NULL, 0, TXTRecordGetLength(&it->second.txtRecordRef), TXTRecordGetBytesPtr(&it->second.txtRecordRef), 0) ==  kDNSServiceErr_NoError)
+      ret = true;
+  }
+  return ret;
 }
 
 bool CZeroconfMDNS::doRemoveService(const std::string& fcr_ident)
@@ -157,7 +181,8 @@ bool CZeroconfMDNS::doRemoveService(const std::string& fcr_ident)
   tServiceMap::iterator it = m_services.find(fcr_ident);
   if(it != m_services.end())
   {
-    DNSServiceRefDeallocate(it->second);
+    DNSServiceRefDeallocate(it->second.serviceRef);
+    TXTRecordDeallocate(&it->second.txtRecordRef);
     m_services.erase(it);
     CLog::Log(LOGDEBUG, "ZeroconfMDNS: Removed service %s", fcr_ident.c_str());
     return true;
@@ -173,7 +198,8 @@ void CZeroconfMDNS::doStop()
     CLog::Log(LOGDEBUG, "ZeroconfMDNS: Shutdown services");
     for(tServiceMap::iterator it = m_services.begin(); it != m_services.end(); ++it)
     {
-      DNSServiceRefDeallocate(it->second);
+      DNSServiceRefDeallocate(it->second.serviceRef);
+      TXTRecordDeallocate(&it->second.txtRecordRef);
       CLog::Log(LOGDEBUG, "ZeroconfMDNS: Removed service %s", it->first.c_str());
     }
     m_services.clear();

@@ -18,7 +18,10 @@
  *  <http://www.gnu.org/licenses/>.
  *
  */
-#include "utils/StdString.h"
+
+#include <string>
+#include <vector>
+
 #include "storage/IStorageProvider.h"
 
 class CDarwinStorageProvider : public IStorageProvider
@@ -33,9 +36,9 @@ public:
   virtual void GetLocalDrives(VECSOURCES &localDrives);
   virtual void GetRemovableDrives(VECSOURCES &removableDrives);
 
-  virtual std::vector<CStdString> GetDiskUsage(void);
+  virtual std::vector<std::string> GetDiskUsage(void);
 
-  virtual bool Eject(CStdString mountpath);
+  virtual bool Eject(const std::string& mountpath);
 
   virtual bool PumpDriveChangeEvents(IStorageEventsCallback *callback);
 

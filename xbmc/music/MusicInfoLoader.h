@@ -30,24 +30,24 @@ class CMusicInfoLoader : public CBackgroundInfoLoader
 {
 public:
   CMusicInfoLoader();
-  virtual ~CMusicInfoLoader();
+  ~CMusicInfoLoader() override;
 
-  void UseCacheOnHD(const CStdString& strFileName);
-  virtual bool LoadItem(CFileItem* pItem);
-  virtual bool LoadItemCached(CFileItem* pItem);
-  virtual bool LoadItemLookup(CFileItem* pItem);
+  void UseCacheOnHD(const std::string& strFileName);
+  bool LoadItem(CFileItem* pItem) override;
+  bool LoadItemCached(CFileItem* pItem) override;
+  bool LoadItemLookup(CFileItem* pItem) override;
   static bool LoadAdditionalTagInfo(CFileItem* pItem);
 
 protected:
-  virtual void OnLoaderStart();
-  virtual void OnLoaderFinish();
-  void LoadCache(const CStdString& strFileName, CFileItemList& items);
-  void SaveCache(const CStdString& strFileName, CFileItemList& items);
+  void OnLoaderStart() override;
+  void OnLoaderFinish() override;
+  void LoadCache(const std::string& strFileName, CFileItemList& items);
+  void SaveCache(const std::string& strFileName, CFileItemList& items);
 protected:
-  CStdString m_strCacheFileName;
+  std::string m_strCacheFileName;
   CFileItemList* m_mapFileItems;
   MAPSONGS m_songsMap;
-  CStdString m_strPrevPath;
+  std::string m_strPrevPath;
   CMusicDatabase m_musicDatabase;
   unsigned int m_databaseHits;
   unsigned int m_tagReads;

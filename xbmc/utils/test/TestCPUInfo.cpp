@@ -18,8 +18,20 @@
  *
  */
 
+#if defined(TARGET_WINDOWS)
+#  if !defined(WIN32_LEAN_AND_MEAN)
+#    define WIN32_LEAN_AND_MEAN
+#  endif
+#  include <windows.h>
+#endif
+
 #include "utils/CPUInfo.h"
-#include "Temperature.h"
+#include "utils/Temperature.h"
+#include "settings/AdvancedSettings.h"
+
+#ifdef TARGET_POSIX
+#include "../linux/XTimeUtils.h"
+#endif
 
 #include "gtest/gtest.h"
 
@@ -38,12 +50,41 @@ TEST(TestCPUInfo, getCPUFrequency)
   EXPECT_GE(g_cpuInfo.getCPUFrequency(), 0.f);
 }
 
+namespace
+{
+class TemporarySetting
+{
+public:
+
+  TemporarySetting(std::string &setting, const char *newValue) :
+    m_Setting(setting),
+    m_OldValue(setting)
+  {
+    m_Setting = newValue;
+  }
+
+  ~TemporarySetting()
+  {
+    m_Setting = m_OldValue;
+  }
+
+private:
+
+  std::string &m_Setting;
+  std::string m_OldValue;
+};
+}
+
+//Disabled for windows because there is no implementation to get the CPU temp and there will probably never be one
+#ifndef TARGET_WINDOWS
 TEST(TestCPUInfo, getTemperature)
 {
+  TemporarySetting command(g_advancedSettings.m_cpuTempCmd, "echo '50 c'");
   CTemperature t;
   EXPECT_TRUE(g_cpuInfo.getTemperature(t));
   EXPECT_TRUE(t.IsValid());
 }
+#endif
 
 TEST(TestCPUInfo, getCPUModel)
 {
@@ -84,7 +125,7 @@ TEST(TestCPUInfo, CoreInfo)
 
 TEST(TestCPUInfo, GetCoresUsageString)
 {
-  EXPECT_STRNE("", g_cpuInfo.GetCoresUsageString());
+  EXPECT_STRNE("", g_cpuInfo.GetCoresUsageString().c_str());
 }
 
 TEST(TestCPUInfo, GetCPUFeatures)
@@ -96,7 +137,7 @@ TEST(TestCPUInfo, GetCPUFeatures)
 TEST(TestCPUInfo, getUsedPercentage_output)
 {
   CCPUInfo c;
-  Sleep(1); /* TODO: Support option from main that sets this parameter */
+  Sleep(1); //! @todo Support option from main that sets this parameter
   int r = c.getUsedPercentage();
   std::cout << "Percentage: " << testing::PrintToString(r) << std::endl;
 }

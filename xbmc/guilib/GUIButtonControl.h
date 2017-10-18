@@ -42,20 +42,20 @@ public:
   CGUIButtonControl(int parentID, int controlID,
                     float posX, float posY, float width, float height,
                     const CTextureInfo& textureFocus, const CTextureInfo& textureNoFocus,
-                    const CLabelInfo &label);
+                    const CLabelInfo &label, bool wrapMultiline = false);
 
-  virtual ~CGUIButtonControl(void);
-  virtual CGUIButtonControl *Clone() const { return new CGUIButtonControl(*this); };
+  ~CGUIButtonControl(void) override;
+  CGUIButtonControl *Clone() const override { return new CGUIButtonControl(*this); };
 
-  virtual void Process(unsigned int currentTime, CDirtyRegionList &dirtyregions);
-  virtual void Render();
-  virtual bool OnAction(const CAction &action) ;
-  virtual bool OnMessage(CGUIMessage& message);
-  virtual void AllocResources();
-  virtual void FreeResources(bool immediately = false);
-  virtual void DynamicResourceAlloc(bool bOnOff);
-  virtual void SetInvalid();
-  virtual void SetPosition(float posX, float posY);
+  void Process(unsigned int currentTime, CDirtyRegionList &dirtyregions) override;
+  void Render() override;
+  bool OnAction(const CAction &action) override ;
+  bool OnMessage(CGUIMessage& message) override;
+  void AllocResources() override;
+  void FreeResources(bool immediately = false) override;
+  void DynamicResourceAlloc(bool bOnOff) override;
+  void SetInvalid() override;
+  void SetPosition(float posX, float posY) override;
   virtual void SetLabel(const std::string & aLabel);
   virtual void SetLabel2(const std::string & aLabel2);
   void SetClickActions(const CGUIAction& clickActions) { m_clickActions = clickActions; };
@@ -63,35 +63,40 @@ public:
   void SetFocusActions(const CGUIAction& focusActions) { m_focusActions = focusActions; };
   void SetUnFocusActions(const CGUIAction& unfocusActions) { m_unfocusActions = unfocusActions; };
   const CLabelInfo& GetLabelInfo() const { return m_label.GetLabelInfo(); };
-  virtual CStdString GetLabel() const { return GetDescription(); };
-  virtual CStdString GetLabel2() const;
+  virtual std::string GetLabel() const { return GetDescription(); };
+  virtual std::string GetLabel2() const;
   void SetSelected(bool bSelected);
-  virtual CStdString GetDescription() const;
+  std::string GetDescription() const override;
+  float GetWidth() const override;
+  virtual void SetMinWidth(float minWidth);
   void SetAlpha(unsigned char alpha);
 
-  void PythonSetLabel(const CStdString &strFont, const std::string &strText, color_t textColor, color_t shadowColor, color_t focusedColor);
+  void PythonSetLabel(const std::string &strFont, const std::string &strText, color_t textColor, color_t shadowColor, color_t focusedColor);
   void PythonSetDisabledColor(color_t disabledColor);
 
   virtual void OnClick();
-  bool HasClickActions() { return m_clickActions.HasActionsMeetingCondition(); };
+  bool HasClickActions() const { return m_clickActions.HasActionsMeetingCondition(); };
 
-  virtual bool UpdateColors();
+  bool UpdateColors() override;
 
-  virtual CRect CalcRenderRegion() const;
+  CRect CalcRenderRegion() const override;
 
 protected:
   friend class CGUISpinControlEx;
-  virtual EVENT_RESULT OnMouseEvent(const CPoint &point, const CMouseEvent &event);
-  void OnFocus();
-  void OnUnFocus();
+  EVENT_RESULT OnMouseEvent(const CPoint &point, const CMouseEvent &event) override;
+  void OnFocus() override;
+  void OnUnFocus() override;
   virtual void ProcessText(unsigned int currentTime);
   virtual void RenderText();
-  CGUILabel::COLOR GetTextColor() const;
+  virtual CGUILabel::COLOR GetTextColor() const;
 
   CGUITexture m_imgFocus;
   CGUITexture m_imgNoFocus;
   unsigned int  m_focusCounter;
   unsigned char m_alpha;
+
+  float m_minWidth;
+  float m_maxWidth;
 
   CGUIInfoLabel  m_info;
   CGUIInfoLabel  m_info2;

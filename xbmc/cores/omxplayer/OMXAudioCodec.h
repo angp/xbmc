@@ -22,11 +22,8 @@
 
 #include "system.h"
 
-#if (defined HAVE_CONFIG_H) && (!defined WIN32)
-  #include "config.h"
-#endif
 #include <vector>
-#include "DllAvCodec.h"
+#include "libavcodec/avcodec.h"
 
 struct AVStream;
 
@@ -102,7 +99,7 @@ public:
   virtual int GetBitRate() { return 0; }
 
   /*
-   * returns if the codec requests to use passtrough
+   * returns if the codec requests to use passthrough
    */
   virtual bool NeedPassthrough() { return false; }
 

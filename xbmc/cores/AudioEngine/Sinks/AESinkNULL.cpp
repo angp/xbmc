@@ -37,17 +37,14 @@ CAESinkNULL::CAESinkNULL()
 {
 }
 
-CAESinkNULL::~CAESinkNULL()
-{
-}
+CAESinkNULL::~CAESinkNULL() = default;
 
 bool CAESinkNULL::Initialize(AEAudioFormat &format, std::string &device)
 {
   // setup for a 250ms sink feed from SoftAE 
-  format.m_dataFormat    = AE_IS_RAW(format.m_dataFormat) ? AE_FMT_S16NE : AE_FMT_FLOAT;
+  format.m_dataFormat    = (format.m_dataFormat == AE_FMT_RAW) ? AE_FMT_S16NE : AE_FMT_FLOAT;
   format.m_frames        = format.m_sampleRate / 1000 * 250;
-  format.m_frameSamples  = format.m_channelLayout.Count();
-  format.m_frameSize     = format.m_frameSamples * (CAEUtil::DataFormatToBits(format.m_dataFormat) >> 3);
+  format.m_frameSize     = format.m_channelLayout.Count() * (CAEUtil::DataFormatToBits(format.m_dataFormat) >> 3);
   m_format = format;
 
   // setup a pretend 500ms internal buffer
@@ -75,23 +72,10 @@ void CAESinkNULL::Deinitialize()
   StopThread();
 }
 
-bool CAESinkNULL::IsCompatible(const AEAudioFormat &format, const std::string &device)
-{
-  return ((m_format.m_sampleRate    == format.m_sampleRate) &&
-          (m_format.m_dataFormat    == format.m_dataFormat) &&
-          (m_format.m_channelLayout == format.m_channelLayout));
-}
-
-double CAESinkNULL::GetDelay()
+void CAESinkNULL::GetDelay(AEDelayStatus& status)
 {
   double sinkbuffer_seconds_to_empty = m_sinkbuffer_sec_per_byte * (double)m_sinkbuffer_level;
-  return sinkbuffer_seconds_to_empty;
-}
-
-double CAESinkNULL::GetCacheTime()
-{
-  double sinkbuffer_seconds_to_empty = m_sinkbuffer_sec_per_byte * (double)m_sinkbuffer_level;
-  return sinkbuffer_seconds_to_empty;
+  status.SetDelay(sinkbuffer_seconds_to_empty);
 }
 
 double CAESinkNULL::GetCacheTotal()
@@ -99,13 +83,13 @@ double CAESinkNULL::GetCacheTotal()
   return m_sinkbuffer_sec_per_byte * (double)m_sinkbuffer_size;
 }
 
-unsigned int CAESinkNULL::AddPackets(uint8_t *data, unsigned int frames, bool hasAudio, bool blocking)
+unsigned int CAESinkNULL::AddPackets(uint8_t **data, unsigned int frames, unsigned int offset)
 {
   unsigned int max_frames = (m_sinkbuffer_size - m_sinkbuffer_level) / m_sink_frameSize;
   if (frames > max_frames)
     frames = max_frames;
 
-  if (hasAudio && frames)
+  if (frames)
   {
     m_sinkbuffer_level += frames * m_sink_frameSize;
     m_wake.Set();
@@ -139,7 +123,7 @@ void CAESinkNULL::Process()
   {
     if (m_draining)
     {
-      // TODO: is it correct to not take data at the appropriate rate while draining?
+      //! @todo is it correct to not take data at the appropriate rate while draining?
       m_sinkbuffer_level = 0;
       m_draining = false;
     }

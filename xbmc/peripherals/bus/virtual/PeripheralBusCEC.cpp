@@ -22,19 +22,17 @@
 #if defined(HAVE_LIBCEC)
 #include "PeripheralBusCEC.h"
 #include "peripherals/Peripherals.h"
-#include "utils/log.h"
 #include "DynamicDll.h"
 
 #include <libcec/cec.h>
 
 using namespace PERIPHERALS;
 using namespace CEC;
-using namespace std;
 
 class DllLibCECInterface
 {
 public:
-  virtual ~DllLibCECInterface() {}
+  virtual ~DllLibCECInterface() = default;
   virtual ICECAdapter* CECInitialise(libcec_configuration *configuration)=0;
   virtual void*        CECDestroy(ICECAdapter *adapter)=0;
 };
@@ -52,7 +50,7 @@ class PERIPHERALS::DllLibCEC : public DllDynamic, DllLibCECInterface
   END_METHOD_RESOLVE()
 };
 
-CPeripheralBusCEC::CPeripheralBusCEC(CPeripherals *manager) :
+CPeripheralBusCEC::CPeripheralBusCEC(CPeripherals& manager) :
     CPeripheralBus("PeripBusCEC", manager, PERIPHERAL_BUS_CEC),
     m_dll(new DllLibCEC),
     m_cecAdapter(NULL)
@@ -101,7 +99,15 @@ bool CPeripheralBusCEC::PerformDeviceScan(PeripheralScanResults &results)
       break;
     case ADAPTERTYPE_RPI:
       result.m_mappedBusType = PERIPHERAL_BUS_RPI;
+      /** the Pi's adapter cannot be removed, no need to rescan */
+      m_bNeedsPolling = false;
       break;
+#if defined(HAS_IMXVPU)
+    case ADAPTERTYPE_IMX:
+      result.m_mappedBusType = PERIPHERAL_BUS_IMX;
+      m_bNeedsPolling = false;
+      break;
+#endif
     default:
       break;
     }

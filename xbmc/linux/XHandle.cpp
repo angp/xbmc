@@ -22,6 +22,8 @@
 #include "utils/log.h"
 #include "threads/SingleLock.h"
 
+#include <cassert>
+
 int CXHandle::m_objectTracker[10] = {0};
 
 HANDLE WINAPI GetCurrentProcess(void) {
@@ -143,32 +145,4 @@ bool CloseHandle(HANDLE hObject) {
   return true;
 }
 
-BOOL WINAPI DuplicateHandle(
-  HANDLE hSourceProcessHandle,
-  HANDLE hSourceHandle,
-  HANDLE hTargetProcessHandle,
-  LPHANDLE lpTargetHandle,
-  DWORD dwDesiredAccess,
-  BOOL bInheritHandle,
-  DWORD dwOptions
-)
-{
-  /* only a simple version of this is supported */
-  ASSERT(hSourceProcessHandle == GetCurrentProcess()
-      && hTargetProcessHandle == GetCurrentProcess()
-      && dwOptions            == DUPLICATE_SAME_ACCESS);
-
-  if (hSourceHandle == INVALID_HANDLE_VALUE)
-    return FALSE;
-
-  {
-    CSingleLock lock(*(hSourceHandle->m_internalLock));
-    hSourceHandle->m_nRefCount++;
-  }
-
-  if(lpTargetHandle)
-    *lpTargetHandle = hSourceHandle;
-
-  return TRUE;
-}
 

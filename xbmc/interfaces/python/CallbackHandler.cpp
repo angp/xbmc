@@ -25,16 +25,15 @@ namespace XBMCAddon
 {
   namespace Python
   {
-
     /**
      * We are ASS-U-MEing that this construction is happening
      *  within the context of a Python call. This way we can
      *  store off the PyThreadState to later verify that we're
      *  handling callbacks in the appropriate thread.
      */
-    PythonCallbackHandler::PythonCallbackHandler() : RetardedAsynchCallbackHandler("PythonCallbackHandler")
+    PythonCallbackHandler::PythonCallbackHandler()
     {
-      TRACE;
+      XBMC_TRACE;
       objectThreadState = PyThreadState_Get();
     }
 
@@ -44,12 +43,12 @@ namespace XBMCAddon
      */
     bool PythonCallbackHandler::isStateOk(AddonClass* obj)
     {
-      TRACE;
+      XBMC_TRACE;
       PyThreadState* state = PyThreadState_Get();
       if (objectThreadState == state)
       {
         // make sure the interpreter is still active.
-        AddonClass::Ref<XBMCAddon::Python::LanguageHook> lh(XBMCAddon::Python::LanguageHook::GetIfExists(state->interp));
+        AddonClass::Ref<XBMCAddon::Python::PythonLanguageHook> lh(XBMCAddon::Python::PythonLanguageHook::GetIfExists(state->interp));
         if (lh.isNotNull() && lh->HasRegisteredAddonClassInstance(obj) && lh.get() == obj->GetLanguageHook())
           return true;
       }
@@ -60,18 +59,18 @@ namespace XBMCAddon
      * For this method we expect the PyThreadState to be passed as the user
      *  data for the check. 
      *
-     * TODO: This is a stupid way to get this information back to the handler.
+     * @todo This is a stupid way to get this information back to the handler.
      *  there should be a more language neutral means.
      */
     bool PythonCallbackHandler::shouldRemoveCallback(AddonClass* obj, void* threadState)
     {
-      TRACE;
+      XBMC_TRACE;
       if (threadState == objectThreadState)
         return true;
 
       // we also want to remove the callback if the language hook no longer exists.
       //   this is a belt-and-suspenders cleanup mechanism
-      return ! XBMCAddon::Python::LanguageHook::IsAddonClassInstanceRegistered(obj);
+      return ! XBMCAddon::Python::PythonLanguageHook::IsAddonClassInstanceRegistered(obj);
     }
   }
 }

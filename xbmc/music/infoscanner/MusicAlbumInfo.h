@@ -35,18 +35,17 @@ class CMusicAlbumInfo
 {
 public:
   CMusicAlbumInfo() : m_bLoaded(false), m_relevance(-1) {}
-  CMusicAlbumInfo(const CStdString& strAlbumInfo, const CScraperUrl& strAlbumURL);
-  CMusicAlbumInfo(const CStdString& strAlbum, const CStdString& strArtist, const CStdString& strAlbumInfo, const CScraperUrl& strAlbumURL);
-  virtual ~CMusicAlbumInfo() {}
+  CMusicAlbumInfo(const std::string& strAlbumInfo, const CScraperUrl& strAlbumURL);
+  CMusicAlbumInfo(const std::string& strAlbum, const std::string& strArtist, const std::string& strAlbumInfo, const CScraperUrl& strAlbumURL);
+  virtual ~CMusicAlbumInfo() = default;
 
   bool Loaded() const { return m_bLoaded; }
   void SetLoaded(bool bLoaded) { m_bLoaded = bLoaded; }
   const CAlbum &GetAlbum() const { return m_album; }
   CAlbum& GetAlbum() { return m_album; }
   void SetAlbum(CAlbum& album);
-  const VECSONGS &GetSongs() const { return m_album.songs; }
-  const CStdString& GetTitle2() const { return m_strTitle2; }
-  void SetTitle(const CStdString& strTitle) { m_album.strAlbum = strTitle; }
+  const std::string& GetTitle2() const { return m_strTitle2; }
+  void SetTitle(const std::string& strTitle) { m_album.strAlbum = strTitle; }
   const CScraperUrl& GetAlbumURL() const { return m_albumURL; }
   float GetRelevance() const { return m_relevance; }
   void SetRelevance(float relevance) { m_relevance = relevance; }
@@ -57,7 +56,7 @@ protected:
   bool m_bLoaded;
   CAlbum m_album;
   float m_relevance;
-  CStdString m_strTitle2;
+  std::string m_strTitle2;
   CScraperUrl m_albumURL;
 };
 

@@ -19,53 +19,111 @@
  */
 
 #include "swighelper.h"
-#include "Dialog.h"
 
+#ifndef DOXYGEN_SHOULD_SKIP_THIS
 namespace XBMCAddon
 {
   namespace xbmcgui
   {
-    /**
-     * lock() -- Lock the gui until xbmcgui.unlock() is called.\n
-     * \n
-     * *Note, This will improve performance when doing a lot of gui manipulation at once.\n
-     *        The main program (xbmc itself) will freeze until xbmcgui.unlock() is called.\n
-     * 
-     * example:
-     *   - xbmcgui.lock()
-     */
-    void lock();
+#endif /* DOXYGEN_SHOULD_SKIP_THIS */
 
-    /**
-     * unlock() -- Unlock the gui from a lock() call.
-     * 
-     * example:
-     *   - xbmcgui.unlock()
-     */
-    void unlock();
+    //
+    /// \defgroup python_xbmcgui Library - xbmcgui
+    /// @{
+    /// @brief **GUI functions on Kodi.**
+    ///
+    /// Offers classes and functions that manipulate the Graphical User
+    /// Interface through windows, dialogs, and various control widgets.
+    //
 
-    /**
-     * getCurrentWindowId() -- Returns the id for the current 'active' window as an integer.
-     * 
-     * example:
-     *   - wid = xbmcgui.getCurrentWindowId()
-     */
+#ifdef DOXYGEN_SHOULD_USE_THIS
+    ///
+    /// \ingroup python_xbmcgui
+    /// @brief \python_func{ xbmcgui.getCurrentWindowId() }
+    ///-------------------------------------------------------------------------
+    /// Returns the id for the current 'active' window as an integer.
+    ///
+    /// @return                        The currently active window Id
+    ///
+    ///
+    ///--------------------------------------------------------------------------
+    ///
+    /// **Example:**
+    /// ~~~~~~~~~~~~~{.py}
+    /// ..
+    /// wid = xbmcgui.getCurrentWindowId()
+    /// ..
+    /// ~~~~~~~~~~~~~
+    ///
+    getCurrentWindowId();
+#else
     long getCurrentWindowId();
+#endif
 
-    /**
-     * getCurrentWindowDialogId() -- Returns the id for the current 'active' dialog as an integer.
-     * 
-     * example:
-     *   - wid = xbmcgui.getCurrentWindowDialogId()
-     */
+#ifdef DOXYGEN_SHOULD_USE_THIS
+    ///
+    /// \ingroup python_xbmcgui
+    /// @brief \python_func{ xbmcgui.getCurrentWindowDialogId() }
+    ///-------------------------------------------------------------------------
+    /// Returns the id for the current 'active' dialog as an integer.
+    ///
+    /// @return                        The currently active dialog Id
+    ///
+    ///
+    ///--------------------------------------------------------------------------
+    ///
+    /// **Example:**
+    /// ~~~~~~~~~~~~~{.py}
+    /// ..
+    /// wid = xbmcgui.getCurrentWindowDialogId()
+    /// ..
+    /// ~~~~~~~~~~~~~
+    ///
+    getCurrentWindowDialogId();
+#else
     long getCurrentWindowDialogId();
+#endif
 
+#ifdef DOXYGEN_SHOULD_USE_THIS
+    ///
+    /// \ingroup python_xbmcgui_window
+    /// @brief \python_func{ getScreenHeight() }
+    ///-------------------------------------------------------------------------
+    /// Returns the height of this screen.
+    ///
+    /// @return                       Screen height
+    ///
+    ///-------------------------------------------------------------------------
+    /// @python_v18 New function added.
+    ///
+    getScreenHeight();
+#else
+    long getScreenHeight();
+#endif
+
+#ifdef DOXYGEN_SHOULD_USE_THIS
+    ///
+    /// \ingroup python_xbmcgui_window
+    /// @brief \python_func{ getScreenWidth() }
+    ///-------------------------------------------------------------------------
+    /// Returns the width of this screen.
+    ///
+    /// @return                       Screen width
+    ///
+    ///-------------------------------------------------------------------------
+    /// @python_v18 New function added.
+    ///
+    getScreenWidth();
+#else
+    long getScreenWidth();
+#endif
+    ///@}
+
+#ifndef DOXYGEN_SHOULD_SKIP_THIS
     SWIG_CONSTANT2(int,ICON_OVERLAY_NONE, CGUIListItem::ICON_OVERLAY_NONE);
     SWIG_CONSTANT2(int,ICON_OVERLAY_RAR, CGUIListItem::ICON_OVERLAY_RAR);
     SWIG_CONSTANT2(int,ICON_OVERLAY_ZIP, CGUIListItem::ICON_OVERLAY_ZIP);
     SWIG_CONSTANT2(int,ICON_OVERLAY_LOCKED, CGUIListItem::ICON_OVERLAY_LOCKED);
-    SWIG_CONSTANT2(int,ICON_OVERLAY_HAS_TRAINER, CGUIListItem::ICON_OVERLAY_HAS_TRAINER);
-    SWIG_CONSTANT2(int,ICON_OVERLAY_TRAINED, CGUIListItem::ICON_OVERLAY_TRAINED);
     SWIG_CONSTANT2(int,ICON_OVERLAY_UNWATCHED, CGUIListItem::ICON_OVERLAY_UNWATCHED);
     SWIG_CONSTANT2(int,ICON_OVERLAY_WATCHED, CGUIListItem::ICON_OVERLAY_WATCHED);
     SWIG_CONSTANT2(int,ICON_OVERLAY_HD, CGUIListItem::ICON_OVERLAY_HD);
@@ -81,8 +139,12 @@ namespace XBMCAddon
     SWIG_CONSTANT(int,INPUT_IPADDRESS);
     SWIG_CONSTANT(int,INPUT_PASSWORD);
 
+    SWIG_CONSTANT(int, HORIZONTAL);
+    SWIG_CONSTANT(int, VERTICAL);
+
     SWIG_CONSTANT(int,PASSWORD_VERIFY);
     SWIG_CONSTANT(int,ALPHANUM_HIDE_INPUT);
 
   }
 }
+#endif /* DOXYGEN_SHOULD_SKIP_THIS */

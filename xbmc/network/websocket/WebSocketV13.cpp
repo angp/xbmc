@@ -45,11 +45,9 @@
 #define WS_PROTOCOL_JSONRPC     "jsonrpc.xbmc.org"
 #define WS_HEADER_UPGRADE_VALUE "websocket"
 
-using namespace std;
-
 bool CWebSocketV13::Handshake(const char* data, size_t length, std::string &response)
 {
-  string strHeader(data, length);
+  std::string strHeader(data, length);
   const char *value;
   HttpParser header;
   if (header.addBytes(data, length) != HttpParser::Done)
@@ -68,14 +66,14 @@ bool CWebSocketV13::Handshake(const char* data, size_t length, std::string &resp
 
   // The request must be HTTP/1.1 or higher
   size_t pos;
-  if ((pos = strHeader.find(WS_HTTP_TAG)) == string::npos)
+  if ((pos = strHeader.find(WS_HTTP_TAG)) == std::string::npos)
   {
     CLog::Log(LOGINFO, "WebSocket [RFC6455]: invalid handshake received");
     return false;
   }
 
   pos += strlen(WS_HTTP_TAG);
-  istringstream converter(strHeader.substr(pos, strHeader.find_first_of(" \r\n\t", pos) - pos));
+  std::istringstream converter(strHeader.substr(pos, strHeader.find_first_of(" \r\n\t", pos) - pos));
   float fVersion;
   converter >> fVersion;
 
@@ -85,7 +83,7 @@ bool CWebSocketV13::Handshake(const char* data, size_t length, std::string &resp
     return false;
   }
 
-  string websocketKey, websocketProtocol;
+  std::string websocketKey, websocketProtocol;
   // There must be a "Host" header
   value = header.getValue("host");
   if (value == NULL || strlen(value) == 0)
@@ -104,7 +102,7 @@ bool CWebSocketV13::Handshake(const char* data, size_t length, std::string &resp
 
   // There must be a "Connection" header with the value "Upgrade"
   value = header.getValue(WS_HEADER_CONNECTION_LC);
-  if (value == NULL || strstr(value, WS_HEADER_UPGRADE) == NULL)
+  if (value == NULL || strnicmp(value, WS_HEADER_UPGRADE, strlen(WS_HEADER_UPGRADE)) != 0)
   {
     CLog::Log(LOGINFO, "WebSocket [RFC6455]: invalid \"%s\" received", WS_HEADER_CONNECTION_LC);
     return true;
@@ -122,11 +120,11 @@ bool CWebSocketV13::Handshake(const char* data, size_t length, std::string &resp
   value = header.getValue(WS_HEADER_PROTOCOL_LC);
   if (value && strlen(value) > 0)
   {
-    CStdStringArray protocols;
-    StringUtils::SplitString(value, ",", protocols);
-    for (unsigned int index = 0; index < protocols.size(); index++)
+    std::vector<std::string> protocols = StringUtils::Split(value, ",");
+    for (std::vector<std::string>::iterator protocol = protocols.begin(); protocol != protocols.end(); ++protocol)
     {
-      if (protocols.at(index).Trim().Equals(WS_PROTOCOL_JSONRPC))
+      StringUtils::Trim(*protocol);
+      if (*protocol == WS_PROTOCOL_JSONRPC)
       {
         websocketProtocol = WS_PROTOCOL_JSONRPC;
         break;

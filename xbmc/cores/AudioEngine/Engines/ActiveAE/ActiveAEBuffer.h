@@ -19,11 +19,16 @@
  *
  */
 
-#include "DllAvUtil.h"
-#include "DllSwResample.h"
-#include "AEAudioFormat.h"
-#include "Interfaces/AE.h"
+#include "cores/AudioEngine/Utils/AEAudioFormat.h"
+#include "cores/AudioEngine/Interfaces/AE.h"
+#include "cores/AudioEngine/Engines/ActiveAE/AudioDSPAddons/ActiveAEDSP.h"
 #include <deque>
+#include <memory>
+
+extern "C" {
+#include "libavutil/avutil.h"
+#include "libswresample/swresample.h"
+}
 
 namespace ActiveAE
 {
@@ -34,6 +39,8 @@ struct SampleConfig
   uint64_t channel_layout;
   int channels;
   int sample_rate;
+  int bits_per_sample;
+  int dither_bits;
 };
 
 /**
@@ -46,12 +53,12 @@ public:
   ~CSoundPacket();
   uint8_t **data;                        // array with pointers to planes of data
   SampleConfig config;
-  AEDataFormat internal_format;          // used when carrying pass through
   int bytes_per_sample;                  // bytes per sample and per channel
   int linesize;                          // see ffmpeg, required for planar formats
   int planes;                            // 1 for non planar formats, #channels for planar
   int nb_samples;                        // number of frames used
   int max_nb_samples;                    // max number of frames this packet can hold
+  int pause_burst_ms;
 };
 
 class CActiveAEBufferPool;
@@ -65,14 +72,15 @@ public:
   void Return();
   CSoundPacket *pkt;
   CActiveAEBufferPool *pool;
-  unsigned int timestamp;
+  int64_t timestamp;
+  int pkt_start_offset;
   int refCount;
 };
 
 class CActiveAEBufferPool
 {
 public:
-  CActiveAEBufferPool(AEAudioFormat format);
+  explicit CActiveAEBufferPool(const AEAudioFormat& format);
   virtual ~CActiveAEBufferPool();
   virtual bool Create(unsigned int totaltime);
   CSampleBuffer *GetFreeBuffer();
@@ -82,31 +90,77 @@ public:
   std::deque<CSampleBuffer*> m_freeSamples;
 };
 
-class CActiveAEResample;
+class IAEResample;
 
 class CActiveAEBufferPoolResample : public CActiveAEBufferPool
 {
 public:
-  CActiveAEBufferPoolResample(AEAudioFormat inputFormat, AEAudioFormat outputFormat, AEQuality quality);
-  virtual ~CActiveAEBufferPoolResample();
-  virtual bool Create(unsigned int totaltime, bool remap);
-  void ChangeResampler();
-  bool ResampleBuffers(unsigned int timestamp = 0);
+  CActiveAEBufferPoolResample(const AEAudioFormat& inputFormat, const AEAudioFormat& outputFormat, AEQuality quality);
+  ~CActiveAEBufferPoolResample() override;
+  using CActiveAEBufferPool::Create;
+  bool Create(unsigned int totaltime, bool remap, bool upmix, bool normalize = true);
+  bool ResampleBuffers(int64_t timestamp = 0);
+  void ConfigureResampler(bool normalizelevels, bool stereoupmix, AEQuality quality);
   float GetDelay();
   void Flush();
+  void SetDrain(bool drain);
+  void SetRR(double rr);
+  double GetRR();
+  void FillBuffer();
+  bool DoesNormalize();
+  void ForceResampler(bool force);
   AEAudioFormat m_inputFormat;
   std::deque<CSampleBuffer*> m_inputSamples;
   std::deque<CSampleBuffer*> m_outputSamples;
-  CSampleBuffer *m_procSample;
-  CActiveAEResample *m_resampler;
+
+protected:
+  void ChangeResampler();
+
   uint8_t *m_planes[16];
-  bool m_fillPackets;
-  bool m_drain;
   bool m_empty;
-  bool m_changeResampler;
+  bool m_drain;
+  int64_t m_lastSamplePts;
+  bool m_remap;
+  CSampleBuffer *m_procSample;
+  IAEResample *m_resampler;
   double m_resampleRatio;
+  bool m_fillPackets;
+  bool m_normalize;
+  bool m_changeResampler;
+  bool m_forceResampler;
   AEQuality m_resampleQuality;
-  unsigned int m_outSampleRate;
+  bool m_stereoUpmix;
 };
 
+class CActiveAEFilter;
+
+class CActiveAEBufferPoolAtempo : public CActiveAEBufferPool
+{
+public:
+  explicit CActiveAEBufferPoolAtempo(const AEAudioFormat& format);
+  ~CActiveAEBufferPoolAtempo() override;
+  bool Create(unsigned int totaltime) override;
+  bool ProcessBuffers();
+  float GetDelay();
+  void Flush();
+  void SetTempo(float tempo);
+  float GetTempo();
+  void FillBuffer();
+  void SetDrain(bool drain);
+  std::deque<CSampleBuffer*> m_inputSamples;
+  std::deque<CSampleBuffer*> m_outputSamples;
+
+protected:
+  void ChangeFilter();
+  std::unique_ptr<CActiveAEFilter> m_pTempoFilter;
+  uint8_t *m_planes[16];
+  CSampleBuffer *m_procSample;
+  bool m_empty;
+  bool m_drain;
+  bool m_changeFilter;
+  float m_tempo;
+  int64_t m_lastSamplePts;
+  bool m_fillPackets;
+};
+  
 }

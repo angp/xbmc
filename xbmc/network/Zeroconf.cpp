@@ -17,24 +17,28 @@
  *  <http://www.gnu.org/licenses/>.
  *
  */
-#include "system.h" //HAS_ZEROCONF define
-#include <assert.h>
 #include "Zeroconf.h"
+
+#include <cassert>
+
+#include "ServiceBroker.h"
 #include "settings/Settings.h"
+#include "system.h" //HAS_ZEROCONF define
+#include "threads/Atomics.h"
+#include "threads/CriticalSection.h"
+#include "threads/SingleLock.h"
+#include "utils/JobManager.h"
 
 #if defined(HAS_AVAHI)
 #include "linux/ZeroconfAvahi.h"
 #elif defined(TARGET_DARWIN)
 //on osx use the native implementation
 #include "osx/ZeroconfOSX.h"
+#elif defined(TARGET_ANDROID)
+#include "android/ZeroconfAndroid.h"
 #elif defined(HAS_MDNS)
 #include "mdns/ZeroconfMDNS.h"
 #endif
-
-#include "threads/CriticalSection.h"
-#include "threads/SingleLock.h"
-#include "threads/Atomics.h"
-#include "utils/JobManager.h"
 
 #ifndef HAS_ZEROCONF
 //dummy implementation used if no zeroconf is present
@@ -45,12 +49,14 @@ class CZeroconfDummy : public CZeroconf
   {
     return false;
   }
+
+  virtual bool doForceReAnnounceService(const std::string&){return false;} 
   virtual bool doRemoveService(const std::string& fcr_ident){return false;}
   virtual void doStop(){}
 };
 #endif
 
-long CZeroconf::sm_singleton_guard = 0;
+std::atomic_flag CZeroconf::sm_singleton_guard = ATOMIC_FLAG_INIT;
 CZeroconf* CZeroconf::smp_instance = 0;
 
 CZeroconf::CZeroconf():mp_crit_sec(new CCriticalSection),m_started(false)
@@ -93,6 +99,15 @@ bool CZeroconf::RemoveService(const std::string& fcr_identifier)
     return true;
 }
 
+bool CZeroconf::ForceReAnnounceService(const std::string& fcr_identifier)
+{
+  if (HasService(fcr_identifier) && m_started)
+  {
+    return doForceReAnnounceService(fcr_identifier);
+  }
+  return false;
+}
+
 bool CZeroconf::HasService(const std::string& fcr_identifier) const
 {
   return (m_service_map.find(fcr_identifier) != m_service_map.end());
@@ -103,9 +118,9 @@ bool CZeroconf::Start()
   CSingleLock lock(*mp_crit_sec);
   if(!IsZCdaemonRunning())
   {
-    CSettings::Get().SetBool("services.zeroconf", false);
-    if (CSettings::Get().GetBool("services.airplay"))
-      CSettings::Get().SetBool("services.airplay", false);
+    CServiceBroker::GetSettings().SetBool(CSettings::SETTING_SERVICES_ZEROCONF, false);
+    if (CServiceBroker::GetSettings().GetBool(CSettings::SETTING_SERVICES_AIRPLAY))
+      CServiceBroker::GetSettings().SetBool(CSettings::SETTING_SERVICES_AIRPLAY, false);
     return false;
   }
   if(m_started)
@@ -137,6 +152,8 @@ CZeroconf*  CZeroconf::GetInstance()
     smp_instance = new CZeroconfOSX;
 #elif defined(HAS_AVAHI)
     smp_instance  = new CZeroconfAvahi;
+#elif defined(TARGET_ANDROID)
+    smp_instance  = new CZeroconfAndroid;
 #elif defined(HAS_MDNS)
     smp_instance  = new CZeroconfMDNS;
 #endif

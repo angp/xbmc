@@ -148,7 +148,8 @@ bool Protocol::SendOutMessage(int signal, void *data /* = NULL */, int size /* =
   { CSingleLock lock(criticalSection);
     outMessages.push(msg);
   }
-  containerOutEvent->Set();
+  if (containerOutEvent)
+    containerOutEvent->Set();
 
   return true;
 }
@@ -176,7 +177,8 @@ bool Protocol::SendInMessage(int signal, void *data /* = NULL */, int size /* = 
   { CSingleLock lock(criticalSection);
     inMessages.push(msg);
   }
-  containerInEvent->Set();
+  if (containerInEvent)
+    containerInEvent->Set();
 
   return true;
 }
@@ -250,4 +252,48 @@ void Protocol::Purge()
 
   while (ReceiveOutMessage(&msg))
     msg->Release();
+}
+
+void Protocol::PurgeIn(int signal)
+{
+  Message *msg;
+  std::queue<Message*> msgs;
+
+  CSingleLock lock(criticalSection);
+
+  while (!inMessages.empty())
+  {
+    msg = inMessages.front();
+    inMessages.pop();
+    if (msg->signal != signal)
+      msgs.push(msg);
+  }
+  while (!msgs.empty())
+  {
+    msg = msgs.front();
+    msgs.pop();
+    inMessages.push(msg);
+  }
+}
+
+void Protocol::PurgeOut(int signal)
+{
+  Message *msg;
+  std::queue<Message*> msgs;
+
+  CSingleLock lock(criticalSection);
+
+  while (!outMessages.empty())
+  {
+    msg = outMessages.front();
+    outMessages.pop();
+    if (msg->signal != signal)
+      msgs.push(msg);
+  }
+  while (!msgs.empty())
+  {
+    msg = msgs.front();
+    msgs.pop();
+    outMessages.push(msg);
+  }
 }

@@ -30,6 +30,8 @@
 
 #include "GUIButtonControl.h"
 #include "utils/Stopwatch.h"
+#include "utils/StringValidation.h"
+#include "utils/Variant.h"
 
 /*!
  \ingroup controls
@@ -57,33 +59,40 @@ public:
   CGUIEditControl(int parentID, int controlID, float posX, float posY,
                   float width, float height, const CTextureInfo &textureFocus, const CTextureInfo &textureNoFocus,
                   const CLabelInfo& labelInfo, const std::string &text);
-  CGUIEditControl(const CGUIButtonControl &button);
-  virtual ~CGUIEditControl(void);
-  virtual CGUIEditControl *Clone() const { return new CGUIEditControl(*this); };
+  explicit CGUIEditControl(const CGUIButtonControl &button);
+  ~CGUIEditControl(void) override;
+  CGUIEditControl *Clone() const override { return new CGUIEditControl(*this); };
 
-  virtual bool OnMessage(CGUIMessage &message);
-  virtual bool OnAction(const CAction &action);
-  virtual void OnClick();
+  bool OnMessage(CGUIMessage &message) override;
+  bool OnAction(const CAction &action) override;
+  void OnClick() override;
 
-  virtual void SetLabel(const std::string &text);
-  virtual void SetLabel2(const std::string &text);
+  void SetLabel(const std::string &text) override;
+  void SetLabel2(const std::string &text) override;
   void SetHint(const CGUIInfoLabel& hint);
 
-  virtual CStdString GetLabel2() const;
+  std::string GetLabel2() const override;
 
   unsigned int GetCursorPosition() const;
   void SetCursorPosition(unsigned int iPosition);
 
-  void SetInputType(INPUT_TYPE type, int heading);
+  void SetInputType(INPUT_TYPE type, CVariant heading);
 
   void SetTextChangeActions(const CGUIAction& textChangeActions) { m_textChangeActions = textChangeActions; };
 
-  bool HasTextChangeActions() { return m_textChangeActions.HasActionsMeetingCondition(); };
+  bool HasTextChangeActions() const { return m_textChangeActions.HasActionsMeetingCondition(); };
+
+  virtual bool HasInvalidInput() const { return m_invalidInput; }
+  virtual void SetInputValidation(StringValidation::Validator inputValidator, void *data = NULL);
 
 protected:
-  virtual void ProcessText(unsigned int currentTime);
-  virtual void RenderText();
-  CStdStringW GetDisplayedText() const;
+  void SetFocus(bool focus) override;
+  void ProcessText(unsigned int currentTime) override;
+  void RenderText() override;
+  CGUILabel::COLOR GetTextColor() const override;
+  std::wstring GetDisplayedText() const;
+  std::string GetDescriptionByIndex(int index) const override;
+  bool SetStyledText(const std::wstring &text);
   void RecalcLabelPosition();
   void ValidateCursor();
   void UpdateText(bool sendUpdate = true);
@@ -91,13 +100,16 @@ protected:
   void OnSMSCharacter(unsigned int key);
   void DefaultConstructor();  
 
+  virtual bool ValidateInput(const std::wstring &data) const;
+  void ValidateInput();
+
   /*! \brief Clear out the current text input if it's an MD5 password.
    \return true if the password is cleared, false otherwise.
    */
   bool ClearMD5();
   
-  CStdStringW m_text2;
-  CStdString  m_text;
+  std::wstring m_text2;
+  std::string  m_text;
   CGUIInfoLabel m_hintInfo;
   float m_textOffset;
   float m_textWidth;
@@ -108,15 +120,23 @@ protected:
   unsigned int m_cursorPos;
   unsigned int m_cursorBlink;
 
-  int m_inputHeading;
+  std::string m_inputHeading;
   INPUT_TYPE m_inputType;
   bool m_isMD5;
 
   CGUIAction m_textChangeActions;
 
+  bool m_invalidInput;
+  StringValidation::Validator m_inputValidator;
+  void *m_inputValidatorData;
+
   unsigned int m_smsKeyIndex;
   unsigned int m_smsLastKey;
   CStopWatch   m_smsTimer;
+
+  std::wstring m_edit;
+  int          m_editOffset;
+  int          m_editLength;
 
   static const char*        smsLetters[10];
   static const unsigned int smsDelay;

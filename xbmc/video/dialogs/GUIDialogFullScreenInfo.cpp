@@ -19,7 +19,7 @@
  */
 
 #include "GUIDialogFullScreenInfo.h"
-#include "guilib/Key.h"
+#include "input/Key.h"
 
 CGUIDialogFullScreenInfo::CGUIDialogFullScreenInfo(void)
     : CGUIDialog(WINDOW_DIALOG_FULLSCREEN_INFO, "DialogFullScreenInfo.xml")
@@ -27,9 +27,7 @@ CGUIDialogFullScreenInfo::CGUIDialogFullScreenInfo(void)
   m_loadType = KEEP_IN_MEMORY;
 }
 
-CGUIDialogFullScreenInfo::~CGUIDialogFullScreenInfo(void)
-{
-}
+CGUIDialogFullScreenInfo::~CGUIDialogFullScreenInfo(void) = default;
 
 bool CGUIDialogFullScreenInfo::OnAction(const CAction &action)
 {

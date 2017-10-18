@@ -22,6 +22,8 @@
 #define GUILIB_GUICONTROLPROFILER_H__
 #pragma once
 
+#include <vector>
+
 #include "GUIControl.h"
 
 class CGUIControlProfiler;
@@ -34,7 +36,7 @@ public:
   CGUIControlProfilerItem * m_pParent;
   CGUIControl *m_pControl;
   std::vector<CGUIControlProfilerItem *> m_vecChildren;
-  CStdString m_strDescription;
+  std::string m_strDescription;
   int m_controlID;
   CGUIControl::GUICONTROLTYPES m_ControlType;
   unsigned int m_visTime;
@@ -71,24 +73,24 @@ public:
   void EndRender(CGUIControl *pControl);
   int GetMaxFrameCount(void) const { return m_iMaxFrameCount; };
   void SetMaxFrameCount(int iMaxFrameCount) { m_iMaxFrameCount = iMaxFrameCount; };
-  void SetOutputFile(const CStdString &strOutputFile) { m_strOutputFile = strOutputFile; };
-  const CStdString &GetOutputFile(void) const { return m_strOutputFile; };
+  void SetOutputFile(const std::string &strOutputFile) { m_strOutputFile = strOutputFile; };
+  const std::string &GetOutputFile(void) const { return m_strOutputFile; };
   bool SaveResults(void);
   unsigned int GetTotalTime(void) const { return m_ItemHead.GetTotalTime(); };
 
   float m_fPerfScale;
 private:
   CGUIControlProfiler(void);
-  ~CGUIControlProfiler(void) {};
-  CGUIControlProfiler(const CGUIControlProfiler &that);
-  CGUIControlProfiler &operator=(const CGUIControlProfiler &that);
+  ~CGUIControlProfiler(void) = default;
+  CGUIControlProfiler(const CGUIControlProfiler &that) = delete;
+  CGUIControlProfiler &operator=(const CGUIControlProfiler &that) = delete;
 
   CGUIControlProfilerItem m_ItemHead;
   CGUIControlProfilerItem *m_pLastItem;
   CGUIControlProfilerItem *FindOrAddControl(CGUIControl *pControl);
 
   static bool m_bIsRunning;
-  CStdString m_strOutputFile;
+  std::string m_strOutputFile;
   int m_iMaxFrameCount;
   int m_iFrameCount;
 };

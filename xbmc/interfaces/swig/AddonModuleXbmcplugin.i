@@ -21,6 +21,13 @@
 %module xbmcplugin
 
 %{
+#if defined(TARGET_WINDOWS)
+#  if !defined(WIN32_LEAN_AND_MEAN)
+#    define WIN32_LEAN_AND_MEAN
+#  endif
+#  include <windows.h>
+#endif
+
 #include "interfaces/legacy/ModuleXbmcplugin.h"
 
 using namespace XBMCAddon;
@@ -35,5 +42,6 @@ using namespace xbmcplugin;
 %feature("knownapitypes") XBMCAddon::xbmcplugin "XBMCAddon::xbmcgui::ListItem"
 
 %include "interfaces/legacy/swighelper.h"
+%include "interfaces/legacy/AddonString.h"
 %include "interfaces/legacy/ModuleXbmcplugin.h"
 

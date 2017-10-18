@@ -19,8 +19,11 @@
  *
  */
 
-#include "IDirectory.h"
 #include <set>
+#include <string>
+#include <vector>
+
+#include "IDirectory.h"
 
 namespace XFILE
 {
@@ -29,21 +32,22 @@ class CMultiPathDirectory :
 {
 public:
   CMultiPathDirectory(void);
-  virtual ~CMultiPathDirectory(void);
-  virtual bool GetDirectory(const CStdString& strPath, CFileItemList &items);
-  virtual bool Exists(const char* strPath);
-  virtual bool Remove(const char* strPath);
+  ~CMultiPathDirectory(void) override;
+  bool GetDirectory(const CURL& url, CFileItemList &items) override;
+  bool Exists(const CURL& url) override;
+  bool Remove(const CURL& url) override;
 
-  static CStdString GetFirstPath(const CStdString &strPath);
-  static bool SupportsWriteFileOperations(const CStdString &strPath);
-  static bool GetPaths(const CStdString& strPath, std::vector<CStdString>& vecPaths);
-  static bool HasPath(const CStdString& strPath, const CStdString& strPathToFind);
-  static CStdString ConstructMultiPath(const std::vector<CStdString> &vecPaths);
-  static CStdString ConstructMultiPath(const std::set<CStdString> &setPaths);
+  static std::string GetFirstPath(const std::string &strPath);
+  static bool SupportsWriteFileOperations(const std::string &strPath);
+  static bool GetPaths(const CURL& url, std::vector<std::string>& vecPaths);
+  static bool GetPaths(const std::string& path, std::vector<std::string>& paths);
+  static bool HasPath(const std::string& strPath, const std::string& strPathToFind);
+  static std::string ConstructMultiPath(const std::vector<std::string> &vecPaths);
+  static std::string ConstructMultiPath(const std::set<std::string> &setPaths);
 
 private:
   void MergeItems(CFileItemList &items);
-  static void AddToMultiPath(CStdString& strMultiPath, const CStdString& strPath);
-  CStdString ConstructMultiPath(const CFileItemList& items, const std::vector<int> &stack);
+  static void AddToMultiPath(std::string& strMultiPath, const std::string& strPath);
+  std::string ConstructMultiPath(const CFileItemList& items, const std::vector<int> &stack);
 };
 }

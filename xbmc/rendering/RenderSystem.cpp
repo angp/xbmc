@@ -21,6 +21,8 @@
 #include "RenderSystem.h"
 
 CRenderSystemBase::CRenderSystemBase()
+  : m_stereoView(RENDER_STEREO_VIEW_OFF)
+  , m_stereoMode(RENDER_STEREO_MODE_OFF)
 {
   m_bRenderCreated = false;
   m_bVSync = true;
@@ -32,10 +34,7 @@ CRenderSystemBase::CRenderSystemBase()
   m_minDXTPitch = 0;
 }
 
-CRenderSystemBase::~CRenderSystemBase()
-{
-
-}
+CRenderSystemBase::~CRenderSystemBase() = default;
 
 void CRenderSystemBase::GetRenderVersion(unsigned int& major, unsigned int& minor) const
 {

@@ -19,11 +19,6 @@
  *
  */
 
-#if defined(HAVE_OMXLIB)
-
-#if (defined HAVE_CONFIG_H) && (!defined WIN32)
-  #include "config.h"
-#endif
 #ifndef __GNUC__
 #pragma warning(push)
 #pragma warning(disable:4244)
@@ -116,6 +111,4 @@ public:
     return DllDynamic::Load();
   }
 };
-#endif
-
 #endif

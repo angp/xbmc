@@ -1,6 +1,6 @@
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      Copyright (C) 2005-2017 Team Kodi
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -13,35 +13,30 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
+ *  along with Kodi; see the file COPYING.  If not, see
  *  <http://www.gnu.org/licenses/>.
  *
  */
-
-#ifndef BUTTON_TRANSLATOR_H
-#define BUTTON_TRANSLATOR_H
-
 #pragma once
 
 #include <map>
-#include <vector>
-#include "system.h" // for HAS_EVENT_SERVER, HAS_SDL_JOYSTICK, HAS_LIRC
+#include <set>
+#include <string>
+
+#include "system.h" // for HAS_EVENT_SERVER
+#include "Action.h"
 
 #ifdef HAS_EVENT_SERVER
 #include "network/EventClient.h"
 #endif
-#include "utils/StdString.h"
 
 class CKey;
-class CAction;
 class TiXmlNode;
+class CCustomControllerTranslator;
+class CTouchTranslator;
+class IButtonMapper;
+class IWindowKeymap;
 
-struct CButtonAction
-{
-  int id;
-  CStdString strID; // needed for "XBMC.ActivateWindow()" type actions
-};
-///
 /// singleton class to map from buttons to actions
 /// Warning: _not_ threadsafe!
 class CButtonTranslator
@@ -50,113 +45,67 @@ class CButtonTranslator
   friend class EVENTCLIENT::CEventButtonState;
 #endif
 
-private:
-  //private construction, and no assignements; use the provided singleton methods
-  CButtonTranslator();
-  CButtonTranslator(const CButtonTranslator&);
-  CButtonTranslator const& operator=(CButtonTranslator const&);
-  virtual ~CButtonTranslator();
-  bool HasDeviceType(TiXmlNode *pWindow, CStdString type);
 public:
-  ///access to singleton
-  static CButtonTranslator& GetInstance();
+  CButtonTranslator();
+  CButtonTranslator(const CButtonTranslator&) = delete;
+  CButtonTranslator const& operator=(CButtonTranslator const&) = delete;
+  virtual ~CButtonTranslator();
 
   // Add/remove a HID device with custom mappings
-  void AddDevice(CStdString& strDevice);
-  void RemoveDevice(CStdString& strDevice);
+  bool AddDevice(const std::string& strDevice);
+  bool RemoveDevice(const std::string& strDevice);
 
-  /// loads Lircmap.xml/IRSSmap.xml (if enabled) and Keymap.xml
-  bool Load(bool AlwaysLoad = false);
+  /// loads Keymap.xml
+  bool Load();
+
   /// clears the maps
   void Clear();
 
-  static void GetActions(std::vector<std::string> &actionList);
-  static void GetWindows(std::vector<std::string> &windowList);
+  /*! \brief Finds out if a longpress mapping exists for this key
+   \param window id of the current window
+   \param key to search a mapping for
+   \return true if a longpress mapping exists
+   */
+  bool HasLongpressMapping(int window, const CKey &key);
 
+  /*! \brief Obtain the action configured for a given window and key
+   \param window the window id
+   \param key the key to query the action for
+   \param fallback if no action is directly configured for the given window, obtain the action from fallback window, if exists or from global config as last resort
+   \return the action matching the key
+   */
   CAction GetAction(int window, const CKey &key, bool fallback = true);
 
-  /*! \brief Translate between a window name and it's id
-   \param window name of the window
-   \return id of the window, or WINDOW_INVALID if not found
+  /*! \brief Obtain the global action configured for a given key
+   \param key the key to query the action for
+   \return the global action
    */
-  static int TranslateWindow(const CStdString &window);
+  CAction GetGlobalAction(const CKey &key);
 
-  /*! \brief Translate between a window id and it's name
-   \param window id of the window
-   \return name of the window, or an empty string if not found
-   */
-  static CStdString TranslateWindow(int window);
-
-  static bool TranslateActionString(const char *szAction, int &action);
-
-#if defined(HAS_LIRC) || defined(HAS_IRSERVERSUITE)
-  int TranslateLircRemoteString(const char* szDevice, const char *szButton);
-#endif
-#if defined(HAS_SDL_JOYSTICK) || defined(HAS_EVENT_SERVER)
-  bool TranslateJoystickString(int window, const char* szDevice, int id,
-                               short inputType, int& action, CStdString& strAction,
-                               bool &fullrange);
-#endif
-
-  bool TranslateTouchAction(int touchAction, int touchPointers, int &window, int &action);
+  void RegisterMapper(const std::string &device, IButtonMapper *mapper);
+  void UnregisterMapper(IButtonMapper *mapper);
 
 private:
+  struct CButtonAction
+  {
+    unsigned int id;
+    std::string strID; // needed for "ActivateWindow()" type actions
+  };
+
   typedef std::multimap<uint32_t, CButtonAction> buttonMap; // our button map to fill in
 
   // m_translatorMap contains all mappings i.e. m_BaseMap + HID device mappings
   std::map<int, buttonMap> m_translatorMap;
+
   // m_deviceList contains the list of connected HID devices
-  std::list<CStdString> m_deviceList;
+  std::set<std::string> m_deviceList;
 
-  int GetActionCode(int window, int action);
-  int GetActionCode(int window, const CKey &key, CStdString &strAction) const;
-#if defined(HAS_SDL_JOYSTICK) || defined(HAS_EVENT_SERVER)
-  typedef std::map<int, std::map<int, std::string> > JoystickMap; // <window, <button/axis, action> >
-  int GetActionCode(int window, int id, const JoystickMap &wmap, CStdString &strAction, bool &fullrange) const;
-#endif
-  int GetFallbackWindow(int windowID);
+  unsigned int GetActionCode(int window, const CKey &key, std::string &strAction) const;
 
-  static uint32_t TranslateGamepadString(const char *szButton);
-  static uint32_t TranslateRemoteString(const char *szButton);
-  static uint32_t TranslateUniversalRemoteString(const char *szButton);
+  void MapWindowActions(const TiXmlNode *pWindow, int wWindowID);
+  void MapAction(uint32_t buttonCode, const std::string &szAction, buttonMap &map);
 
-  static uint32_t TranslateKeyboardString(const char *szButton);
-  static uint32_t TranslateKeyboardButton(TiXmlElement *pButton);
+  bool LoadKeymap(const std::string &keymapPath);
 
-  static uint32_t TranslateMouseCommand(const char *szButton);
-
-  static uint32_t TranslateAppCommand(const char *szButton);
-
-  void MapWindowActions(TiXmlNode *pWindow, int wWindowID);
-  void MapAction(uint32_t buttonCode, const char *szAction, buttonMap &map);
-
-  bool LoadKeymap(const CStdString &keymapPath);
-#if defined(HAS_LIRC) || defined(HAS_IRSERVERSUITE)
-  bool LoadLircMap(const CStdString &lircmapPath);
-  void ClearLircButtonMapEntries();
-
-  void MapRemote(TiXmlNode *pRemote, const char* szDevice);
-
-  typedef std::map<CStdString, CStdString> lircButtonMap;
-  std::map<CStdString, lircButtonMap*> lircRemotesMap;
-#endif
-
-#if defined(HAS_SDL_JOYSTICK) || defined(HAS_EVENT_SERVER)
-  void MapJoystickActions(int windowID, TiXmlNode *pJoystick);
-
-  std::map<std::string, JoystickMap> m_joystickButtonMap;      // <joy name, button map>
-  std::map<std::string, JoystickMap> m_joystickAxisMap;        // <joy name, axis map>
-  std::map<std::string, JoystickMap> m_joystickHatMap;        // <joy name, hat map>
-#endif
-
-  void MapTouchActions(int windowID, TiXmlNode *pTouch);
-  static uint32_t TranslateTouchCommand(TiXmlElement *pButton, CButtonAction &action);
-  int GetTouchActionCode(int window, int action);
-
-  std::map<int, buttonMap> m_touchMap;
-
-  bool m_Loaded;
+  std::map<std::string, IButtonMapper*> m_buttonMappers;
 };
-
-#endif
-

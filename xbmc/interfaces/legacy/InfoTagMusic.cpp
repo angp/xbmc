@@ -26,12 +26,12 @@ namespace XBMCAddon
 {
   namespace xbmc
   {
-    InfoTagMusic::InfoTagMusic() : AddonClass("InfoTagMusic")
+    InfoTagMusic::InfoTagMusic()
     {
       infoTag = new MUSIC_INFO::CMusicInfoTag();
     }
 
-    InfoTagMusic::InfoTagMusic(const MUSIC_INFO::CMusicInfoTag& tag) : AddonClass("InfoTagMusic")
+    InfoTagMusic::InfoTagMusic(const MUSIC_INFO::CMusicInfoTag& tag)
     {
       infoTag = new MUSIC_INFO::CMusicInfoTag();
       *infoTag = tag;
@@ -40,6 +40,11 @@ namespace XBMCAddon
     InfoTagMusic::~InfoTagMusic()
     {
       delete infoTag;
+    }
+
+    int InfoTagMusic::getDbId()
+    {
+      return infoTag->GetDatabaseId();
     }
 
     String InfoTagMusic::getURL()
@@ -52,14 +57,19 @@ namespace XBMCAddon
       return infoTag->GetTitle();
     }
 
+    String InfoTagMusic::getMediaType()
+    {
+      return infoTag->GetType();
+    }
+
     String InfoTagMusic::getArtist()
     {
-      return StringUtils::Join(infoTag->GetArtist(), g_advancedSettings.m_musicItemSeparator);
+      return infoTag->GetArtistString();
     }
 
     String InfoTagMusic::getAlbumArtist()
     {
-      return StringUtils::Join(infoTag->GetAlbumArtist(), g_advancedSettings.m_musicItemSeparator);
+      return infoTag->GetAlbumArtistString();
     }
 
     String InfoTagMusic::getAlbum()
@@ -75,6 +85,16 @@ namespace XBMCAddon
     int InfoTagMusic::getDuration()
     {
       return infoTag->GetDuration();
+    }
+
+    int InfoTagMusic::getRating()
+    {
+      return infoTag->GetRating();
+    }
+
+    int InfoTagMusic::getUserRating()
+    {
+      return infoTag->GetUserrating();
     }
 
     int InfoTagMusic::getTrack()

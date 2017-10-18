@@ -46,6 +46,7 @@ struct Partition {
   uint32_t AccessType;
   uint32_t Start;
   uint32_t Length;
+  uint32_t Start_Correction;
 };
 
 struct AD {
@@ -56,7 +57,7 @@ struct AD {
 };
 
 /* Previously dvdread would assume files only had one AD chain, and since they
- * are 1GB or less, this is most problably true. However, now we handle chains
+ * are 1GB or less, this is most probably true. However, now we handle chains
  * for large files. ECMA_167 does not specify the maximum number of chains, is
  * it as many as can fit in a 2048 block (minus ID 266 size), or some other
  * limit. For now, I have assumed that;
@@ -75,6 +76,7 @@ struct FileAD {
     uint32_t num_AD;
     uint16_t Partition;
     uint32_t Partition_Start;
+    uint32_t Partition_Start_Correction;
     uint8_t  Type;
     uint16_t Flags;
     struct AD AD_chain[UDF_MAX_AD_CHAINS];
@@ -215,7 +217,7 @@ private:
   int DVDReadLBUDF( uint32_t lb_number, size_t block_count, unsigned char *data, int encrypted );
   int ReadAt( int64_t pos, size_t len, unsigned char *data );
   int UDFMapICB( struct AD ICB, struct Partition *partition, struct FileAD *File );
-  int UDFScanDir( struct FileAD Dir, char *FileName, struct Partition *partition, struct AD *FileICB, int cache_file_info);
+  int UDFScanDir( const struct FileAD& Dir, char *FileName, struct Partition *partition, struct AD *FileICB, int cache_file_info);
   int SetUDFCache(UDFCacheType type, uint32_t nr, void *data);
 protected:
     /* Filesystem cache */

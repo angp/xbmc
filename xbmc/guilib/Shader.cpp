@@ -20,12 +20,11 @@
 
 #include "system.h"
 
-#if defined(HAS_GL) || HAS_GLES == 2
-
 #include "Shader.h"
 #include "filesystem/File.h"
 #include "utils/log.h"
 #include "utils/GLUtils.h"
+#include "windowing/WindowingFactory.h"
 
 #ifdef HAS_GLES
 #define GLchar char
@@ -35,25 +34,57 @@
 
 using namespace Shaders;
 using namespace XFILE;
-using namespace std;
 
 //////////////////////////////////////////////////////////////////////
 // CShader
 //////////////////////////////////////////////////////////////////////
-bool CShader::LoadSource(const string& filename, const string& prefix)
+bool CShader::LoadSource(const std::string& filename, const std::string& prefix)
 {
   if(filename.empty())
     return true;
 
   CFileStream file;
 
-  if(!file.Open("special://xbmc/system/shaders/" + filename))
+  std::string path = "special://xbmc/system/shaders/";
+  path += g_Windowing.GetShaderPath();
+  path += filename;
+  if(!file.Open(path))
   {
     CLog::Log(LOGERROR, "CYUVShaderGLSL::CYUVShaderGLSL - failed to open file %s", filename.c_str());
     return false;
   }
   getline(file, m_source, '\0');
-  m_source.insert(0, prefix);
+
+  size_t pos = 0;
+  size_t versionPos = m_source.find("#version");
+  if (versionPos != std::string::npos)
+  {
+    versionPos = m_source.find("\n", versionPos);
+    if (versionPos != std::string::npos)
+      pos = versionPos + 1;
+  }
+  m_source.insert(pos, prefix);
+  return true;
+}
+
+bool CShader::AppendSource(const std::string& filename)
+{
+  if(filename.empty())
+    return true;
+
+  CFileStream file;
+  std::string temp;
+
+  std::string path = "special://xbmc/system/shaders/";
+  path += g_Windowing.GetShaderPath();
+  path += filename;
+  if(!file.Open(path))
+  {
+    CLog::Log(LOGERROR, "CShader::AppendSource - failed to open file %s", filename.c_str());
+    return false;
+  }
+  getline(file, temp, '\0');
+  m_source.append(temp);
   return true;
 }
 
@@ -66,14 +97,6 @@ bool CGLSLVertexShader::Compile()
   GLint params[4];
 
   Free();
-
-#ifdef HAS_GL
-  if(!GLEW_VERSION_2_0)
-  {
-    CLog::Log(LOGERROR, "GL: GLSL vertex shaders not supported");
-    return false;
-  }
-#endif
 
   m_vertexShader = glCreateShader(GL_VERTEX_SHADER);
   const char *ptr = m_source.c_str();
@@ -104,11 +127,6 @@ bool CGLSLVertexShader::Compile()
 
 void CGLSLVertexShader::Free()
 {
-#ifdef HAS_GL
-  if(!GLEW_VERSION_2_0)
-    return;
-#endif
-
   if (m_vertexShader)
     glDeleteShader(m_vertexShader);
   m_vertexShader = 0;
@@ -166,14 +184,6 @@ void CARBVertexShader::Free()
 //////////////////////////////////////////////////////////////////////
 bool CGLSLPixelShader::Compile()
 {
-#ifdef HAS_GL
-  if(!GLEW_VERSION_2_0)
-  {
-    CLog::Log(LOGERROR, "GL: GLSL pixel shaders not supported");
-    return false;
-  }
-#endif
-
   GLint params[4];
 
   Free();
@@ -213,10 +223,6 @@ bool CGLSLPixelShader::Compile()
 
 void CGLSLPixelShader::Free()
 {
-#ifdef HAS_GL
-  if(!GLEW_VERSION_2_0)
-    return;
-#endif
   if (m_pixelShader)
     glDeleteShader(m_pixelShader);
   m_pixelShader = 0;
@@ -278,10 +284,6 @@ void CARBPixelShader::Free()
 //////////////////////////////////////////////////////////////////////
 void CGLSLShaderProgram::Free()
 {
-#ifdef HAS_GL
-  if(!GLEW_VERSION_2_0)
-    return;
-#endif
   m_pVP->Free();
   VerifyGLState();
   m_pFP->Free();
@@ -297,15 +299,6 @@ void CGLSLShaderProgram::Free()
 
 bool CGLSLShaderProgram::CompileAndLink()
 {
-#ifdef HAS_GL
-  // check that we support shaders
-  if(!GLEW_VERSION_2_0)
-  {
-    CLog::Log(LOGERROR, "GL: GLSL shaders not supported");
-    return false;
-  }
-#endif
-
   GLint params[4];
 
   // free resources
@@ -317,7 +310,6 @@ bool CGLSLShaderProgram::CompileAndLink()
     CLog::Log(LOGERROR, "GL: Error compiling vertex shader");
     return false;
   }
-  CLog::Log(LOGDEBUG, "GL: Vertex Shader compiled successfully");
 
   // compile pixel shader
   if (!m_pFP->Compile())
@@ -326,7 +318,6 @@ bool CGLSLShaderProgram::CompileAndLink()
     CLog::Log(LOGERROR, "GL: Error compiling fragment shader");
     return false;
   }
-  CLog::Log(LOGDEBUG, "GL: Fragment Shader compiled successfully");
 
   // create program object
   if (!(m_shaderProgram = glCreateProgram()))
@@ -374,11 +365,6 @@ bool CGLSLShaderProgram::CompileAndLink()
 
 bool CGLSLShaderProgram::Enable()
 {
-#ifdef HAS_GL
-  if(!GLEW_VERSION_2_0)
-    return false;
-#endif
-
   if (OK())
   {
     glUseProgram(m_shaderProgram);
@@ -414,11 +400,6 @@ bool CGLSLShaderProgram::Enable()
 
 void CGLSLShaderProgram::Disable()
 {
-#ifdef HAS_GL
-  if(!GLEW_VERSION_2_0)
-    return;
-#endif
-
   if (OK())
   {
     glUseProgram(0);
@@ -509,7 +490,5 @@ void CARBShaderProgram::Disable()
     OnDisabled();
   }
 }
-
-#endif
 
 #endif

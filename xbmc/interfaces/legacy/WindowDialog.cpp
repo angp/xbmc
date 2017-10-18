@@ -22,25 +22,28 @@
 
 #include "guilib/GUIWindow.h"
 #include "guilib/GUIWindowManager.h"
+#include "WindowInterceptor.h"
 
 namespace XBMCAddon
 {
   namespace xbmcgui
   {
-
-    WindowDialog::WindowDialog() throw(WindowException) :
-      Window("WindowDialog"), WindowDialogMixin(this)
+    WindowDialog::WindowDialog() :
+      Window(true), WindowDialogMixin(this)
     {
       CSingleLock lock(g_graphicsContext);
-      setWindow(new Interceptor<CGUIWindow>("CGUIWindow",this,getNextAvailalbeWindowId()));
+      InterceptorBase* interceptor = new Interceptor<CGUIWindow>("CGUIWindow", this, getNextAvailableWindowId());
+      // set the render order to the dialog's default because this dialog is mapped to CGUIWindow instead of CGUIDialog
+      interceptor->SetRenderOrder(RENDER_ORDER_DIALOG);
+      setWindow(interceptor);
     }
 
     WindowDialog::~WindowDialog() { deallocating(); }
 
     bool WindowDialog::OnMessage(CGUIMessage& message)
     {
-#ifdef ENABLE_TRACE_API
-      TRACE;
+#ifdef ENABLE_XBMC_TRACE_API
+      XBMC_TRACE;
       CLog::Log(LOGDEBUG,"%sNEWADDON WindowDialog::OnMessage Message %d", _tg.getSpaces(),message.GetMessage());
 #endif
 
@@ -66,7 +69,7 @@ namespace XBMCAddon
 
     bool WindowDialog::OnAction(const CAction &action)
     {
-      TRACE;
+      XBMC_TRACE;
       return WindowDialogMixin::OnAction(action) ? true : Window::OnAction(action);
     }
 

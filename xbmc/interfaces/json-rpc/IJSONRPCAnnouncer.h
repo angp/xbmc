@@ -21,13 +21,14 @@
 
 #include "interfaces/IAnnouncer.h"
 #include "utils/JSONVariantWriter.h"
+#include "utils/Variant.h"
 
 namespace JSONRPC
 {
   class IJSONRPCAnnouncer : public ANNOUNCEMENT::IAnnouncer
   {
   public:
-    virtual ~IJSONRPCAnnouncer() { }
+    ~IJSONRPCAnnouncer() override = default;
 
   protected:
     static std::string AnnouncementToJSONRPC(ANNOUNCEMENT::AnnouncementFlag flag, const char *sender, const char *method, const CVariant &data, bool compactOutput)
@@ -43,7 +44,10 @@ namespace JSONRPC
       root["params"]["data"] = data;
       root["params"]["sender"] = sender;
 
-      return CJSONVariantWriter::Write(root, compactOutput);
+      std::string str;
+      CJSONVariantWriter::Write(root, str, compactOutput);
+
+      return str;
     }
   };
 }

@@ -29,7 +29,7 @@
 #include <string>
 #include "network/Zeroconf.h"
 
-#include <boost/shared_ptr.hpp>
+#include <memory>
 #include <avahi-client/client.h>
 #include <avahi-client/publish.h>
 #include <avahi-common/defs.h>
@@ -40,19 +40,20 @@ class CZeroconfAvahi : public CZeroconf
 {
 public:
   CZeroconfAvahi();
-  ~CZeroconfAvahi();
+  ~CZeroconfAvahi() override;
 
 protected:
   //implement base CZeroConf interface
-  virtual bool doPublishService(const std::string& fcr_identifier,
-                                const std::string& fcr_type,
-                                const std::string& fcr_name,
-                                unsigned int f_port,
-                                const std::vector<std::pair<std::string, std::string> >& txt);
+  bool doPublishService(const std::string& fcr_identifier,
+                        const std::string& fcr_type,
+                        const std::string& fcr_name,
+                        unsigned int f_port,
+                        const std::vector<std::pair<std::string, std::string> >& txt) override;
 
-  virtual bool doRemoveService(const std::string& fcr_ident);
+  bool doForceReAnnounceService(const std::string& fcr_identifier) override;
+  bool doRemoveService(const std::string& fcr_ident) override;
 
-  virtual void doStop();
+  void doStop() override;
 
 private:
   ///this is where the client calls us if state changes
@@ -72,8 +73,8 @@ private:
 
   //helper struct for holding information about creating a service / AvahiEntryGroup
   //we have to hold that as it's needed to recreate the service
-  class ServiceInfo;
-  typedef std::map<std::string, boost::shared_ptr<ServiceInfo> > tServiceMap;
+  struct ServiceInfo;
+  typedef std::map<std::string, std::shared_ptr<ServiceInfo> > tServiceMap;
 
   //goes through a list of todos and publishs them (takes the client a param, as it might be called from
   // from the callbacks)

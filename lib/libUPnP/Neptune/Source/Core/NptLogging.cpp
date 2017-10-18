@@ -67,7 +67,7 @@ public:
     static NPT_Result Create(const char* logger_name, NPT_LogHandler*& handler);
 
     // methods
-    void Log(const NPT_LogRecord& record);
+    void Log(const NPT_LogRecord& record) override;
 
 private:
     // members
@@ -82,7 +82,7 @@ public:
     static NPT_Result Create(const char* logger_name, NPT_LogHandler*& handler);
 
     // methods
-    void Log(const NPT_LogRecord& record);
+    void Log(const NPT_LogRecord& record) override;
 
 private:
     NPT_Result Open(bool append = true);
@@ -104,7 +104,7 @@ public:
     static NPT_Result Create(const char* logger_name, NPT_LogHandler*& handler);
 
     // methods
-    void Log(const NPT_LogRecord& record);
+    void Log(const NPT_LogRecord& record) override;
 
 private:
     // methods
@@ -122,7 +122,7 @@ public:
     static NPT_Result Create(const char* logger_name, NPT_LogHandler*& handler);
 
     // methods
-    void Log(const NPT_LogRecord& record);
+    void Log(const NPT_LogRecord& record) override;
 
 private:
     // members
@@ -136,7 +136,7 @@ public:
     static NPT_Result Create(NPT_LogHandler*& handler);
 
     // methods
-    void Log(const NPT_LogRecord& record);
+    void Log(const NPT_LogRecord& record) override;
 };
 
 class NPT_LogCustomHandler : public NPT_LogHandler {
@@ -146,7 +146,7 @@ public:
     static NPT_Result Create(NPT_LogHandler*& handler);
     
     // methods
-    void Log(const NPT_LogRecord& record);
+    void Log(const NPT_LogRecord& record) override;
     
 private:
     static CustomHandlerExternalFunction s_ExternalFunction;
@@ -489,6 +489,8 @@ NPT_LogManager::Unlock()
 NPT_Result
 NPT_LogManager::Configure(const char* config_sources) 
 {
+    //NPT_AutoLock lock(LogManager.m_Lock);
+    
     // exit if we're already initialized
     if (m_Configured) return NPT_SUCCESS;
 
@@ -960,6 +962,7 @@ NPT_Logger::Log(int          level,
 
     /* call all handlers for this logger and parents */
     m_Manager.Lock();
+    //m_Manager.SetEnabled(false); // prevent recursion
     while (logger) {
         /* call all handlers for the current logger */
         for (NPT_List<NPT_LogHandler*>::Iterator i = logger->m_Handlers.GetFirstItem();
@@ -976,6 +979,7 @@ NPT_Logger::Log(int          level,
             break;
         }
     }
+    //m_Manager.SetEnabled(true);
     m_Manager.Unlock();
 
     /* free anything we may have allocated */

@@ -19,12 +19,7 @@
  */
 #pragma once
 
-#include "AddonString.h"
-#include "AddonUtils.h"
-#include "swighelper.h"
-
 #include "utils/log.h"
-#include "utils/StdString.h"
 #include "commons/Exception.h"
 
 #ifndef SWIG
@@ -36,7 +31,7 @@ namespace XBMCAddon
    * UnimplementedException Can be used in places like the 
    *  Control hierarchy where the
    *  requirements of dynamic language usage force us to add 
-   *  unimplmenented methods to a class hierarchy. See the 
+   *  unimplemented methods to a class hierarchy. See the 
    *  detailed explanation on the class Control for more.
    */
   class UnimplementedException : public XbmcCommons::Exception
@@ -68,6 +63,4 @@ namespace XBMCAddon
  *  languages. See the comment in AddonControl.h for more details.
  */
 #define THROW_UNIMP(classname) throw UnimplementedException(classname, __FUNCTION__)
-#define DECL_UNIMP(classname) throw(UnimplementedException) { throw UnimplementedException(classname, __FUNCTION__); }
-#define DECL_UNIMP2(classname,otherexception) throw(UnimplementedException,otherexception) { throw UnimplementedException(classname, __FUNCTION__); }
 

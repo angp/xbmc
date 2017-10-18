@@ -19,10 +19,11 @@
  *
  */
 
+#include <stdint.h>
 #include <vector>
 
 #include "profiles/Profile.h"
-#include "settings/ISettingsHandler.h"
+#include "settings/lib/ISettingsHandler.h"
 #include "threads/CriticalSection.h"
 
 class TiXmlNode;
@@ -30,12 +31,11 @@ class TiXmlNode;
 class CProfilesManager : public ISettingsHandler
 {
 public:
-  static CProfilesManager& Get();
+  static CProfilesManager& GetInstance();
 
-  virtual bool OnSettingsLoading();
-  virtual void OnSettingsLoaded();
-  virtual bool OnSettingsSaved();
-  virtual void OnSettingsCleared();
+  void OnSettingsLoaded() override;
+  void OnSettingsSaved() const override;
+  void OnSettingsCleared() override;
 
   bool Load();
   /*! \brief Load the user profile information from disk
@@ -46,7 +46,7 @@ public:
     */
   bool Load(const std::string &file);
 
-  bool Save();
+  bool Save() const;
   /*! \brief Save the user profile information to disk
     Saves the list of profiles to the profiles.xml file.
     \param file XML file to save.
@@ -66,24 +66,24 @@ public:
     */
   const CProfile& GetMasterProfile() const;
 
-  /*! \brief Retreive the current profile
+  /*! \brief Retrieve the current profile
     \return const reference to the current profile
     */
   const CProfile& GetCurrentProfile() const;
 
-  /*! \brief Retreive the profile from an index
+  /*! \brief Retrieve the profile from an index
     \param unsigned index of the profile to retrieve
     \return const pointer to the profile, NULL if the index is invalid
     */
   const CProfile* GetProfile(size_t index) const;
 
-  /*! \brief Retreive the profile from an index
+  /*! \brief Retrieve the profile from an index
     \param unsigned index of the profile to retrieve
     \return pointer to the profile, NULL if the index is invalid
     */
   CProfile* GetProfile(size_t index);
 
-  /*! \brief Retreive index of a particular profile by name
+  /*! \brief Retrieve index of a particular profile by name
     \param name name of the profile index to retrieve
     \return index of this profile, -1 if invalid.
     */
@@ -124,7 +124,7 @@ public:
     */
   void LoadMasterProfileForLogin();
 
-  /*! \brief Retreive the last used profile index
+  /*! \brief Retrieve the last used profile index
     \return the last used profile that logged in.  Does not count the
     master user during login.
     */
@@ -171,6 +171,7 @@ public:
   std::string GetVideoThumbFolder() const;
   std::string GetBookmarksThumbFolder() const;
   std::string GetLibraryFolder() const;
+  std::string GetSavestatesFolder() const;
   std::string GetSettingsFile() const;
 
   // uses HasSlashAtEnd to determine if a directory or file was meant
@@ -178,9 +179,9 @@ public:
 
 protected:
   CProfilesManager();
-  CProfilesManager(const CProfilesManager&);
-  CProfilesManager const& operator=(CProfilesManager const&);
-  virtual ~CProfilesManager();
+  CProfilesManager(const CProfilesManager&) = delete;
+  CProfilesManager& operator=(CProfilesManager const&) = delete;
+  ~CProfilesManager() override;
 
 private:
   /*! \brief Set the current profile id and update the special://profile path
@@ -190,6 +191,7 @@ private:
 
   std::vector<CProfile> m_profiles;
   bool m_usingLoginScreen;
+  bool m_profileLoadedForLogin;
   int m_autoLoginProfile;
   uint32_t m_lastUsedProfile;
   uint32_t m_currentProfile; // do not modify directly, use SetCurrentProfileId() function instead

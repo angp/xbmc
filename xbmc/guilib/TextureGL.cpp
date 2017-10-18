@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2005-2013 Team XBMC
+ *      Copyright (C) 2005-2015 Team XBMC
  *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -19,14 +19,17 @@
  */
 
 #include "system.h"
-#include "TextureGL.h"
+#include "Texture.h"
 #include "windowing/WindowingFactory.h"
 #include "utils/log.h"
 #include "utils/GLUtils.h"
+#include "guilib/TextureManager.h"
+#include "settings/AdvancedSettings.h"
+#ifdef TARGET_POSIX
+#include "linux/XMemUtils.h"
+#endif
 
 #if defined(HAS_GL) || defined(HAS_GLES)
-
-using namespace std;
 
 /************************************************************************/
 /*    CGLTexture                                                       */
@@ -50,7 +53,7 @@ void CGLTexture::CreateTextureObject()
 void CGLTexture::DestroyTextureObject()
 {
   if (m_texture)
-    glDeleteTextures(1, (GLuint*) &m_texture);
+    g_TextureManager.ReleaseHwTexture(m_texture);
 }
 
 void CGLTexture::LoadToGPU()
@@ -70,9 +73,26 @@ void CGLTexture::LoadToGPU()
   // Bind the texture object
   glBindTexture(GL_TEXTURE_2D, m_texture);
 
+  GLenum filter = (m_scalingMethod == TEXTURE_SCALING::NEAREST ? GL_NEAREST : GL_LINEAR);
+
   // Set the texture's stretching properties
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  if (IsMipmapped())
+  {
+    GLenum mipmapFilter = (m_scalingMethod == TEXTURE_SCALING::NEAREST ? GL_LINEAR_MIPMAP_NEAREST : GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, mipmapFilter);
+
+#ifndef HAS_GLES
+    // Lower LOD bias equals more sharpness, but less smooth animation
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS, -0.5f);
+    glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
+#endif
+  }
+  else
+  {
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+  }
+
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
@@ -174,11 +194,19 @@ void CGLTexture::LoadToGPU()
   glTexImage2D(GL_TEXTURE_2D, 0, internalformat, m_textureWidth, m_textureHeight, 0,
     pixelformat, GL_UNSIGNED_BYTE, m_pixels);
 
+  if (IsMipmapped())
+  {
+    glGenerateMipmap(GL_TEXTURE_2D);
+  }
+
 #endif
   VerifyGLState();
 
-  delete [] m_pixels;
-  m_pixels = NULL;
+  if (!m_bCacheMemory)
+  {
+    _aligned_free(m_pixels);
+    m_pixels = NULL;
+  }
 
   m_loadedToGPU = true;
 }
@@ -187,9 +215,6 @@ void CGLTexture::BindToUnit(unsigned int unit)
 {
   glActiveTexture(GL_TEXTURE0 + unit);
   glBindTexture(GL_TEXTURE_2D, m_texture);
-#ifndef HAS_GLES
-  glEnable(GL_TEXTURE_2D);
-#endif
 }
 
 #endif // HAS_GL

@@ -28,16 +28,16 @@ namespace XFILE
   {
     public:
       CNFSDirectory(void);
-      virtual ~CNFSDirectory(void);
-      virtual bool GetDirectory(const CStdString& strPath, CFileItemList &items);
-      virtual DIR_CACHE_TYPE GetCacheType(const CStdString &strPath) const { return DIR_CACHE_ONCE; };
-      virtual bool Create(const char* strPath);
-      virtual bool Exists(const char* strPath);
-      virtual bool Remove(const char* strPath);
+      ~CNFSDirectory(void) override;
+      bool GetDirectory(const CURL& url, CFileItemList &items) override;
+      DIR_CACHE_TYPE GetCacheType(const CURL& url) const override { return DIR_CACHE_ONCE; };
+      bool Create(const CURL& url) override;
+      bool Exists(const CURL& url) override;
+      bool Remove(const CURL& url) override;
     private:
       bool GetServerList(CFileItemList &items);
-      bool GetDirectoryFromExportList(const CStdString& strPath, CFileItemList &items);
-      bool ResolveSymlink( const CStdString &dirName, struct nfsdirent *dirent, CURL &resolvedUrl);
+      bool GetDirectoryFromExportList(const std::string& strPath, CFileItemList &items);
+      bool ResolveSymlink( const std::string &dirName, struct nfsdirent *dirent, CURL &resolvedUrl);
   };
 }
 

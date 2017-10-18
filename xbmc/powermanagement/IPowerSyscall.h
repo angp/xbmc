@@ -1,7 +1,7 @@
 #pragma once
 
 /*
- *      Copyright (C) 2005-2013 Team XBMC
+ *      Copyright (C) 2005-2015 Team XBMC
  *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -23,7 +23,7 @@
 class IPowerEventsCallback
 {
 public:
-  virtual ~IPowerEventsCallback() { }
+  virtual ~IPowerEventsCallback() = default;
 
   virtual void OnSleep() = 0;
   virtual void OnWake() = 0;
@@ -34,7 +34,7 @@ public:
 class IPowerSyscall
 {
 public:
-  virtual ~IPowerSyscall() {};
+  virtual ~IPowerSyscall() = default;
   virtual bool Powerdown()    = 0;
   virtual bool Suspend()      = 0;
   virtual bool Hibernate()    = 0;
@@ -45,6 +45,8 @@ public:
   virtual bool CanSuspend()   = 0;
   virtual bool CanHibernate() = 0;
   virtual bool CanReboot()    = 0;
+
+  virtual int  CountPowerFeatures() = 0;
   
 // Battery related functions
   virtual int  BatteryLevel() = 0;
@@ -60,17 +62,31 @@ public:
    \param callback the callback to signal to
    */
   virtual bool PumpPowerEvents(IPowerEventsCallback *callback) = 0;
+
+  static const int MAX_COUNT_POWER_FEATURES = 4;
 };
 
-class CPowerSyscallWithoutEvents : public IPowerSyscall
+class CAbstractPowerSyscall : public IPowerSyscall
+{
+public:
+  int CountPowerFeatures() override
+  {
+      return (CanPowerdown() ? 1 : 0)
+             + (CanSuspend() ? 1 : 0)
+             + (CanHibernate() ? 1 : 0)
+             + (CanReboot() ? 1 : 0);
+  }
+};
+
+class CPowerSyscallWithoutEvents : public CAbstractPowerSyscall
 {
 public:
   CPowerSyscallWithoutEvents() { m_OnResume = false; m_OnSuspend = false; }
 
-  virtual bool Suspend() { m_OnSuspend = true; return false; }
-  virtual bool Hibernate() { m_OnSuspend = true; return false; }
+  bool Suspend() override { m_OnSuspend = true; return false; }
+  bool Hibernate() override { m_OnSuspend = true; return false; }
 
-  virtual bool PumpPowerEvents(IPowerEventsCallback *callback)
+  bool PumpPowerEvents(IPowerEventsCallback *callback) override
   {
     if (m_OnSuspend)
     {

@@ -22,38 +22,41 @@
 #include "iso9660.h"
 #include "Util.h"
 #include "utils/URIUtils.h"
+#include "utils/StringUtils.h"
 #include "URL.h"
 #include "FileItem.h"
+#ifdef TARGET_POSIX
+#include "linux/XTimeUtils.h"
+#endif
+#ifdef TARGET_WINDOWS
+#include "platform/win32/CharsetConverter.h"
+#endif
 
 using namespace XFILE;
 
-CISO9660Directory::CISO9660Directory(void)
-{}
+CISO9660Directory::CISO9660Directory(void) = default;
 
-CISO9660Directory::~CISO9660Directory(void)
-{}
+CISO9660Directory::~CISO9660Directory(void) = default;
 
-bool CISO9660Directory::GetDirectory(const CStdString& strPath, CFileItemList &items)
+bool CISO9660Directory::GetDirectory(const CURL& url, CFileItemList &items)
 {
-  CStdString strRoot = strPath;
+  std::string strRoot = url.Get();
   URIUtils::AddSlashAtEnd(strRoot);
 
   // Scan active disc if not done before
   if (!m_isoReader.IsScanned())
     m_isoReader.Scan();
 
-  CURL url(strPath);
-
   WIN32_FIND_DATA wfd;
   HANDLE hFind;
 
   memset(&wfd, 0, sizeof(wfd));
 
-  CStdString strSearchMask;
-  CStdString strDirectory = url.GetFileName();
+  std::string strSearchMask;
+  std::string strDirectory = url.GetFileName();
   if (strDirectory != "")
   {
-    strSearchMask.Format("\\%s", strDirectory.c_str());
+    strSearchMask = StringUtils::Format("\\%s", strDirectory.c_str());
   }
   else
   {
@@ -74,11 +77,15 @@ bool CISO9660Directory::GetDirectory(const CStdString& strPath, CFileItemList &i
     {
       if ( (wfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) )
       {
-        CStdString strDir = wfd.cFileName;
+#ifdef TARGET_WINDOWS
+        auto strDir = KODI::PLATFORM::WINDOWS::FromW(wfd.cFileName);
+#else
+        std::string strDir = wfd.cFileName;
+#endif
         if (strDir != "." && strDir != "..")
         {
-          CFileItemPtr pItem(new CFileItem(wfd.cFileName));
-          CStdString path = strRoot + wfd.cFileName;
+          CFileItemPtr pItem(new CFileItem(strDir));
+          std::string path = strRoot + strDir;
           URIUtils::AddSlashAtEnd(path);
           pItem->SetPath(path);
           pItem->m_bIsFolder = true;
@@ -90,8 +97,13 @@ bool CISO9660Directory::GetDirectory(const CStdString& strPath, CFileItemList &i
       }
       else
       {
-        CFileItemPtr pItem(new CFileItem(wfd.cFileName));
-        pItem->SetPath(strRoot + wfd.cFileName);
+#ifdef TARGET_WINDOWS
+        auto strDir = KODI::PLATFORM::WINDOWS::FromW(wfd.cFileName);
+#else
+        std::string strDir = wfd.cFileName;
+#endif
+        CFileItemPtr pItem(new CFileItem(strDir));
+        pItem->SetPath(strRoot + strDir);
         pItem->m_bIsFolder = false;
         pItem->m_dwSize = CUtil::ToInt64(wfd.nFileSizeHigh, wfd.nFileSizeLow);
         FILETIME localTime;
@@ -107,10 +119,10 @@ bool CISO9660Directory::GetDirectory(const CStdString& strPath, CFileItemList &i
   return true;
 }
 
-bool CISO9660Directory::Exists(const char* strPath)
+bool CISO9660Directory::Exists(const CURL& url)
 {
   CFileItemList items;
-  if (GetDirectory(strPath,items))
+  if (GetDirectory(url,items))
     return true;
 
   return false;

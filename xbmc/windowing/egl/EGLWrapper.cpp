@@ -17,15 +17,14 @@
  *  <http://www.gnu.org/licenses/>.
  *
  */
-
 #include "system.h"
 
 #ifdef HAS_EGL
-
 #include "utils/log.h"
-#include "EGLNativeTypeAndroid.h"
-#include "EGLNativeTypeAmlogic.h"
-#include "EGLNativeTypeRaspberryPI.h"
+#include <assert.h>
+#if defined(HAS_IMXVPU)
+  #include "EGLNativeTypeIMX.h"
+#endif
 #include "EGLWrapper.h"
 
 #define CheckError() m_result = eglGetError(); if(m_result != EGL_SUCCESS) CLog::Log(LOGERROR, "EGL error in %s: %x",__FUNCTION__, m_result);
@@ -79,9 +78,11 @@ bool CEGLWrapper::Initialize(const std::string &implementation)
 
   // Try to create each backend in sequence and go with the first one
   // that we know will work
-  if ((nativeGuess = CreateEGLNativeType<CEGLNativeTypeAndroid>(implementation)) ||
-      (nativeGuess = CreateEGLNativeType<CEGLNativeTypeAmlogic>(implementation)) ||
-      (nativeGuess = CreateEGLNativeType<CEGLNativeTypeRaspberryPI>(implementation)))
+  if (
+#if defined(HAS_IMXVPU)
+      (nativeGuess = CreateEGLNativeType<CEGLNativeTypeIMX>(implementation))
+#endif
+      )
   {
     m_nativeTypes = nativeGuess;
 
@@ -211,12 +212,11 @@ bool CEGLWrapper::InitDisplay(EGLDisplay *display)
 
 bool CEGLWrapper::ChooseConfig(EGLDisplay display, EGLint *configAttrs, EGLConfig *config)
 {
-  EGLBoolean eglStatus = true;
   EGLint     configCount = 0;
   EGLConfig* configList = NULL;
 
   // Find out how many configurations suit our needs
-  eglStatus = eglChooseConfig(display, configAttrs, NULL, 0, &configCount);
+  EGLBoolean eglStatus = eglChooseConfig(display, configAttrs, NULL, 0, &configCount);
   CheckError();
 
   if (!eglStatus || !configCount)
@@ -278,10 +278,14 @@ bool CEGLWrapper::GetSurfaceSize(EGLDisplay display, EGLSurface surface, EGLint 
   if (!width || !height)
     return false;
 
-  if (!eglQuerySurface(display, surface, EGL_WIDTH, width)     ||
-        !eglQuerySurface(display, surface, EGL_HEIGHT, height) ||
-        *width <= 0 || *height <= 0)
-  return false;
+  const bool failedToQuerySurfaceSize =
+    !eglQuerySurface(display, surface, EGL_WIDTH, width) ||
+    !eglQuerySurface(display, surface, EGL_HEIGHT, height);
+  const bool invalidSurfaceSize =
+    *width <= 0 || *height <= 0;
+
+  if (failedToQuerySurfaceSize || invalidSurfaceSize)
+    return false;
 
   return true;
 }

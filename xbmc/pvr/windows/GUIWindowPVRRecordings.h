@@ -1,5 +1,4 @@
 #pragma once
-
 /*
  *      Copyright (C) 2012-2013 Team XBMC
  *      http://xbmc.org
@@ -20,50 +19,51 @@
  *
  */
 
-#include "GUIWindowPVRCommon.h"
 #include "video/VideoThumbLoader.h"
 #include "video/VideoDatabase.h"
-#include "utils/Observer.h"
+
+#include "pvr/PVRSettings.h"
+#include "pvr/windows/GUIWindowPVRBase.h"
 
 namespace PVR
 {
-  class CGUIWindowPVR;
-
-  class CGUIWindowPVRRecordings : public CGUIWindowPVRCommon, private Observer
+  class CGUIWindowPVRRecordingsBase : public CGUIWindowPVRBase
   {
-    friend class CGUIWindowPVR;
-
   public:
-    CGUIWindowPVRRecordings(CGUIWindowPVR *parent);
-    virtual ~CGUIWindowPVRRecordings(void) {};
+    CGUIWindowPVRRecordingsBase(bool bRadio, int id, const std::string &xmlFile);
+    ~CGUIWindowPVRRecordingsBase() override;
 
-    static CStdString GetResumeString(const CFileItem& item);
-
-    void GetContextButtons(int itemNumber, CContextButtons &buttons) const;
-    bool OnAction(const CAction &action);
-    bool OnContextButton(int itemNumber, CONTEXT_BUTTON button);
-    void OnWindowUnload(void);
-    void UpdateData(bool bUpdateSelectedFile = true);
-    void Notify(const Observable &obs, const ObservableMessage msg);
-    void UnregisterObservers(void);
-    void ResetObservers(void);
+    void OnWindowLoaded() override;
+    bool OnMessage(CGUIMessage& message) override;
+    bool OnAction(const CAction &action) override;
+    void GetContextButtons(int itemNumber, CContextButtons &buttons) override;
+    bool OnContextButton(int itemNumber, CONTEXT_BUTTON button) override;
+    bool Update(const std::string &strDirectory, bool updateFilterPath = true) override;
+    void UpdateButtons() override;
 
   protected:
-    virtual void BeforeUpdate(const CStdString &strDirectory);
-    virtual void AfterUpdate(CFileItemList& items);
+    std::string GetDirectoryPath(void) override;
+    void OnPrepareFileItems(CFileItemList &items) override;
+    bool GetFilteredItems(const std::string &filter, CFileItemList &items) override;
 
   private:
-    bool OnClickButton(CGUIMessage &message);
-    bool OnClickList(CGUIMessage &message);
+    bool OnContextButtonDeleteAll(CFileItem *item, CONTEXT_BUTTON button);
 
-    bool OnContextButtonDelete(CFileItem *item, CONTEXT_BUTTON button);
-    bool OnContextButtonInfo(CFileItem *item, CONTEXT_BUTTON button);
-    bool OnContextButtonPlay(CFileItem *item, CONTEXT_BUTTON button);
-    bool OnContextButtonRename(CFileItem *item, CONTEXT_BUTTON button);
-    bool OnContextButtonMarkWatched(const CFileItemPtr &item, CONTEXT_BUTTON button);
-
-    CStdString m_strSelectedPath;
     CVideoThumbLoader m_thumbLoader;
     CVideoDatabase m_database;
+    bool m_bShowDeletedRecordings;
+    CPVRSettings m_settings;
+  };
+
+  class CGUIWindowPVRTVRecordings : public CGUIWindowPVRRecordingsBase
+  {
+  public:
+    CGUIWindowPVRTVRecordings() : CGUIWindowPVRRecordingsBase(false, WINDOW_TV_RECORDINGS, "MyPVRRecordings.xml") {}
+  };
+
+  class CGUIWindowPVRRadioRecordings : public CGUIWindowPVRRecordingsBase
+  {
+  public:
+    CGUIWindowPVRRadioRecordings() : CGUIWindowPVRRecordingsBase(true, WINDOW_RADIO_RECORDINGS, "MyPVRRecordings.xml") {}
   };
 }

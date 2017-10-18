@@ -34,6 +34,10 @@ public:
   ~CryptThreadingInitializer();
 
   CCriticalSection* get_lock(int index);
+
+private:
+    CryptThreadingInitializer(const CryptThreadingInitializer &rhs) = delete;
+    CryptThreadingInitializer& operator=(const CryptThreadingInitializer&) = delete;
 };
 
 XBMC_GLOBAL_REF(CryptThreadingInitializer,g_cryptThreadingInitializer);

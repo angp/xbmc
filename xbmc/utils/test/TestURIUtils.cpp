@@ -18,35 +18,47 @@
  *
  */
 
-#include "utils/URIUtils.h"
-#include "settings/AdvancedSettings.h"
-#include "URL.h"
+#include <utility>
 
 #include "gtest/gtest.h"
+
+#include "filesystem/MultiPathDirectory.h"
+#include "settings/AdvancedSettings.h"
+#include "URL.h"
+#include "utils/URIUtils.h"
+
+using namespace XFILE;
 
 class TestURIUtils : public testing::Test
 {
 protected:
-  TestURIUtils(){}
-  ~TestURIUtils()
+  TestURIUtils() = default;
+  ~TestURIUtils() override
   {
     g_advancedSettings.m_pathSubstitutions.clear();
   }
 };
 
-TEST_F(TestURIUtils, IsInPath)
+TEST_F(TestURIUtils, PathHasParent)
 {
-  EXPECT_TRUE(URIUtils::IsInPath("/path/to/movie.avi", "/path/to/"));
-  EXPECT_FALSE(URIUtils::IsInPath("/path/to/movie.avi", "/path/2/"));
+  EXPECT_TRUE(URIUtils::PathHasParent("/path/to/movie.avi", "/path/to/"));
+  EXPECT_FALSE(URIUtils::PathHasParent("/path/to/movie.avi", "/path/2/"));
 }
 
 TEST_F(TestURIUtils, GetDirectory)
 {
-  CStdString ref, var;
+  EXPECT_STREQ("/path/to/", URIUtils::GetDirectory("/path/to/movie.avi").c_str());
+  EXPECT_STREQ("/path/to/", URIUtils::GetDirectory("/path/to/").c_str());
+  EXPECT_STREQ("/path/to/|option=foo", URIUtils::GetDirectory("/path/to/movie.avi|option=foo").c_str());
+  EXPECT_STREQ("/path/to/|option=foo", URIUtils::GetDirectory("/path/to/|option=foo").c_str());
+  EXPECT_STREQ("", URIUtils::GetDirectory("movie.avi").c_str());
+  EXPECT_STREQ("", URIUtils::GetDirectory("movie.avi|option=foo").c_str());
+  EXPECT_STREQ("", URIUtils::GetDirectory("").c_str());
 
-  ref = "/path/to/";
-  URIUtils::GetDirectory("/path/to/movie.avi", var);
-  EXPECT_STREQ(ref.c_str(), var.c_str());
+  // Make sure it works when assigning to the same str as the reference parameter
+  std::string var = "/path/to/movie.avi|option=foo";
+  var = URIUtils::GetDirectory(var);
+  EXPECT_STREQ("/path/to/|option=foo", var.c_str());
 }
 
 TEST_F(TestURIUtils, GetExtension)
@@ -82,7 +94,7 @@ TEST_F(TestURIUtils, GetFileName)
 
 TEST_F(TestURIUtils, RemoveExtension)
 {
-  CStdString ref, var;
+  std::string ref, var;
 
   /* NOTE: CSettings need to be set to find other extensions. */
   ref = "/path/to/file";
@@ -93,7 +105,7 @@ TEST_F(TestURIUtils, RemoveExtension)
 
 TEST_F(TestURIUtils, ReplaceExtension)
 {
-  CStdString ref, var;
+  std::string ref, var;
 
   ref = "/path/to/file.xsd";
   var = URIUtils::ReplaceExtension("/path/to/file.xml", ".xsd");
@@ -102,18 +114,24 @@ TEST_F(TestURIUtils, ReplaceExtension)
 
 TEST_F(TestURIUtils, Split)
 {
-  CStdString refpath, reffile, varpath, varfile;
+  std::string refpath, reffile, varpath, varfile;
 
   refpath = "/path/to/";
   reffile = "movie.avi";
   URIUtils::Split("/path/to/movie.avi", varpath, varfile);
   EXPECT_STREQ(refpath.c_str(), varpath.c_str());
   EXPECT_STREQ(reffile.c_str(), varfile.c_str());
+
+  std::string varpathOptional, varfileOptional;
+
+  URIUtils::Split("/path/to/movie.avi?showinfo=true", varpathOptional, varfileOptional);
+  EXPECT_STREQ(refpath.c_str(), varpathOptional.c_str());
+  EXPECT_STREQ(reffile.c_str(), varfileOptional.c_str());
 }
 
 TEST_F(TestURIUtils, SplitPath)
 {
-  CStdStringArray strarray;
+  std::vector<std::string> strarray;
 
   strarray = URIUtils::SplitPath("http://www.test.com/path/to/movie.avi");
 
@@ -130,7 +148,7 @@ TEST_F(TestURIUtils, SplitPathLocal)
 #else
   const char *path = "/path/to/movie.avi";
 #endif
-  CStdStringArray strarray;
+  std::vector<std::string> strarray;
 
   strarray = URIUtils::SplitPath(path);
 
@@ -146,7 +164,7 @@ TEST_F(TestURIUtils, SplitPathLocal)
 
 TEST_F(TestURIUtils, GetCommonPath)
 {
-  CStdString ref, var;
+  std::string ref, var;
 
   ref = "/path/";
   var = "/path/2/movie.avi";
@@ -156,7 +174,7 @@ TEST_F(TestURIUtils, GetCommonPath)
 
 TEST_F(TestURIUtils, GetParentPath)
 {
-  CStdString ref, var;
+  std::string ref, var;
 
   ref = "/path/to/";
   var = URIUtils::GetParentPath("/path/to/movie.avi");
@@ -169,14 +187,58 @@ TEST_F(TestURIUtils, GetParentPath)
 
 TEST_F(TestURIUtils, SubstitutePath)
 {
-  CStdString from, to, ref, var;
+  std::string from, to, ref, var;
 
-  from = "/somepath";
-  to = "/someotherpath";
+  from = "C:\\My Videos";
+  to = "https://myserver/some%20other%20path";
   g_advancedSettings.m_pathSubstitutions.push_back(std::make_pair(from, to));
 
-  ref = "/someotherpath/to/movie.avi";
-  var = URIUtils::SubstitutePath("/somepath/to/movie.avi");
+  from = "/this/path1";
+  to = "/some/other/path2";
+  g_advancedSettings.m_pathSubstitutions.push_back(std::make_pair(from, to));
+
+  from = "davs://otherserver/my%20music%20path";
+  to = "D:\\Local Music\\MP3 Collection";
+  g_advancedSettings.m_pathSubstitutions.push_back(std::make_pair(from, to));
+
+  ref = "https://myserver/some%20other%20path/sub%20dir/movie%20name.avi";
+  var = URIUtils::SubstitutePath("C:\\My Videos\\sub dir\\movie name.avi");
+  EXPECT_STREQ(ref.c_str(), var.c_str());
+
+  ref = "C:\\My Videos\\sub dir\\movie name.avi";
+  var = URIUtils::SubstitutePath("https://myserver/some%20other%20path/sub%20dir/movie%20name.avi", true);
+  EXPECT_STREQ(ref.c_str(), var.c_str());
+
+  ref = "D:\\Local Music\\MP3 Collection\\Phil Collins\\Some CD\\01 - Two Hearts.mp3";
+  var = URIUtils::SubstitutePath("davs://otherserver/my%20music%20path/Phil%20Collins/Some%20CD/01%20-%20Two%20Hearts.mp3");
+  EXPECT_STREQ(ref.c_str(), var.c_str());
+
+  ref = "davs://otherserver/my%20music%20path/Phil%20Collins/Some%20CD/01%20-%20Two%20Hearts.mp3";
+  var = URIUtils::SubstitutePath("D:\\Local Music\\MP3 Collection\\Phil Collins\\Some CD\\01 - Two Hearts.mp3", true);
+  EXPECT_STREQ(ref.c_str(), var.c_str());
+
+  ref = "/some/other/path2/to/movie.avi";
+  var = URIUtils::SubstitutePath("/this/path1/to/movie.avi");
+  EXPECT_STREQ(ref.c_str(), var.c_str());
+
+  ref = "/this/path1/to/movie.avi";
+  var = URIUtils::SubstitutePath("/some/other/path2/to/movie.avi", true);
+  EXPECT_STREQ(ref.c_str(), var.c_str());
+
+  ref = "/no/translation path/";
+  var = URIUtils::SubstitutePath(ref);
+  EXPECT_STREQ(ref.c_str(), var.c_str());
+
+  ref = "/no/translation path/";
+  var = URIUtils::SubstitutePath(ref, true);
+  EXPECT_STREQ(ref.c_str(), var.c_str());
+
+  ref = "c:\\no\\translation path";
+  var = URIUtils::SubstitutePath(ref);
+  EXPECT_STREQ(ref.c_str(), var.c_str());
+
+  ref = "c:\\no\\translation path";
+  var = URIUtils::SubstitutePath(ref, true);
   EXPECT_STREQ(ref.c_str(), var.c_str());
 }
 
@@ -193,11 +255,6 @@ TEST_F(TestURIUtils, IsSourcesPath)
 TEST_F(TestURIUtils, IsCDDA)
 {
   EXPECT_TRUE(URIUtils::IsCDDA("cdda://path/to/cdda"));
-}
-
-TEST_F(TestURIUtils, IsDAAP)
-{
-  EXPECT_TRUE(URIUtils::IsDAAP("daap://path/to/daap"));
 }
 
 TEST_F(TestURIUtils, IsDOSPath)
@@ -232,21 +289,6 @@ TEST_F(TestURIUtils, IsHD)
   EXPECT_TRUE(URIUtils::IsHD("rar://path/to/file"));
 }
 
-TEST_F(TestURIUtils, IsHDHomeRun)
-{
-  EXPECT_TRUE(URIUtils::IsHDHomeRun("hdhomerun://path/to/file"));
-}
-
-TEST_F(TestURIUtils, IsSlingbox)
-{
-  EXPECT_TRUE(URIUtils::IsSlingbox("sling://path/to/file"));
-}
-
-TEST_F(TestURIUtils, IsHTSP)
-{
-  EXPECT_TRUE(URIUtils::IsHTSP("htsp://path/to/file"));
-}
-
 TEST_F(TestURIUtils, IsInArchive)
 {
   EXPECT_TRUE(URIUtils::IsInArchive("zip://path/to/file"));
@@ -278,13 +320,7 @@ TEST_F(TestURIUtils, IsISO9660)
 
 TEST_F(TestURIUtils, IsLiveTV)
 {
-  EXPECT_TRUE(URIUtils::IsLiveTV("tuxbox://path/to/file"));
-  EXPECT_TRUE(URIUtils::IsLiveTV("vtp://path/to/file"));
-  EXPECT_TRUE(URIUtils::IsLiveTV("hdhomerun://path/to/file"));
-  EXPECT_TRUE(URIUtils::IsLiveTV("sling://path/to/file"));
-  EXPECT_TRUE(URIUtils::IsLiveTV("htsp://path/to/file"));
-  EXPECT_TRUE(URIUtils::IsLiveTV("sap://path/to/file"));
-  EXPECT_TRUE(URIUtils::IsLiveTV("myth://path/channels/"));
+  EXPECT_TRUE(URIUtils::IsLiveTV("whatever://path/to/file.pvr"));
 }
 
 TEST_F(TestURIUtils, IsMultiPath)
@@ -297,21 +333,10 @@ TEST_F(TestURIUtils, IsMusicDb)
   EXPECT_TRUE(URIUtils::IsMusicDb("musicdb://path/to/file"));
 }
 
-TEST_F(TestURIUtils, IsMythTV)
-{
-  EXPECT_TRUE(URIUtils::IsMythTV("myth://path/to/file"));
-}
-
 TEST_F(TestURIUtils, IsNfs)
 {
   EXPECT_TRUE(URIUtils::IsNfs("nfs://path/to/file"));
   EXPECT_TRUE(URIUtils::IsNfs("stack://nfs://path/to/file"));
-}
-
-TEST_F(TestURIUtils, IsAfp)
-{
-  EXPECT_TRUE(URIUtils::IsAfp("afp://path/to/file"));
-  EXPECT_TRUE(URIUtils::IsAfp("stack://afp://path/to/file"));
 }
 
 TEST_F(TestURIUtils, IsOnDVD)
@@ -324,11 +349,12 @@ TEST_F(TestURIUtils, IsOnDVD)
 
 TEST_F(TestURIUtils, IsOnLAN)
 {
-  EXPECT_TRUE(URIUtils::IsOnLAN("multipath://daap://path/to/file"));
-  EXPECT_TRUE(URIUtils::IsOnLAN("stack://daap://path/to/file"));
-  EXPECT_TRUE(URIUtils::IsOnLAN("daap://path/to/file"));
+  std::vector<std::string> multiVec;
+  multiVec.push_back("smb://path/to/file");
+  EXPECT_TRUE(URIUtils::IsOnLAN(CMultiPathDirectory::ConstructMultiPath(multiVec)));
+  EXPECT_TRUE(URIUtils::IsOnLAN("stack://smb://path/to/file"));
+  EXPECT_TRUE(URIUtils::IsOnLAN("smb://path/to/file"));
   EXPECT_FALSE(URIUtils::IsOnLAN("plugin://path/to/file"));
-  EXPECT_TRUE(URIUtils::IsOnLAN("tuxbox://path/to/file"));
   EXPECT_TRUE(URIUtils::IsOnLAN("upnp://path/to/file"));
 }
 
@@ -373,11 +399,6 @@ TEST_F(TestURIUtils, IsStack)
   EXPECT_TRUE(URIUtils::IsStack("stack://path/to/file"));
 }
 
-TEST_F(TestURIUtils, IsTuxBox)
-{
-  EXPECT_TRUE(URIUtils::IsTuxBox("tuxbox://path/to/file"));
-}
-
 TEST_F(TestURIUtils, IsUPnP)
 {
   EXPECT_TRUE(URIUtils::IsUPnP("upnp://path/to/file"));
@@ -392,11 +413,6 @@ TEST_F(TestURIUtils, IsURL)
 TEST_F(TestURIUtils, IsVideoDb)
 {
   EXPECT_TRUE(URIUtils::IsVideoDb("videodb://path/to/file"));
-}
-
-TEST_F(TestURIUtils, IsVTP)
-{
-  EXPECT_TRUE(URIUtils::IsVTP("vtp://path/to/file"));
 }
 
 TEST_F(TestURIUtils, IsZIP)
@@ -414,7 +430,7 @@ TEST_F(TestURIUtils, IsBluray)
 
 TEST_F(TestURIUtils, AddSlashAtEnd)
 {
-  CStdString ref, var;
+  std::string ref, var;
 
   ref = "bluray://path/to/file/";
   var = "bluray://path/to/file/";
@@ -430,7 +446,7 @@ TEST_F(TestURIUtils, HasSlashAtEnd)
 
 TEST_F(TestURIUtils, RemoveSlashAtEnd)
 {
-  CStdString ref, var;
+  std::string ref, var;
 
   ref = "bluray://path/to/file";
   var = "bluray://path/to/file/";
@@ -440,43 +456,45 @@ TEST_F(TestURIUtils, RemoveSlashAtEnd)
 
 TEST_F(TestURIUtils, CreateArchivePath)
 {
-  CStdString ref, var;
+  std::string ref, var;
 
-  ref = "file://%2fpath%2fto%2f/file";
-  URIUtils::CreateArchivePath(var, "file", "/path/to/", "file");
+  ref = "zip://%2fpath%2fto%2f/file";
+  var = URIUtils::CreateArchivePath("zip", CURL("/path/to/"), "file").Get();
   EXPECT_STREQ(ref.c_str(), var.c_str());
 }
 
 TEST_F(TestURIUtils, AddFileToFolder)
 {
-  CStdString ref = "/path/to/file";
-  CStdString var = URIUtils::AddFileToFolder("/path/to", "file");
+  std::string ref = "/path/to/file";
+  std::string var = URIUtils::AddFileToFolder("/path/to", "file");
+  EXPECT_STREQ(ref.c_str(), var.c_str());
+
+  ref = "/path/to/file/and/more";
+  var = URIUtils::AddFileToFolder("/path", "to", "file", "and", "more");
   EXPECT_STREQ(ref.c_str(), var.c_str());
 }
 
-TEST_F(TestURIUtils, ProtocolHasParentInHostname)
+TEST_F(TestURIUtils, HasParentInHostname)
 {
-  EXPECT_TRUE(URIUtils::ProtocolHasParentInHostname("zip"));
-  EXPECT_TRUE(URIUtils::ProtocolHasParentInHostname("rar"));
-  EXPECT_TRUE(URIUtils::ProtocolHasParentInHostname("bluray"));
+  EXPECT_TRUE(URIUtils::HasParentInHostname(CURL("zip://")));
+  EXPECT_TRUE(URIUtils::HasParentInHostname(CURL("rar://")));
+  EXPECT_TRUE(URIUtils::HasParentInHostname(CURL("bluray://")));
 }
 
-TEST_F(TestURIUtils, ProtocolHasEncodedHostname)
+TEST_F(TestURIUtils, HasEncodedHostname)
 {
-  EXPECT_TRUE(URIUtils::ProtocolHasEncodedHostname("zip"));
-  EXPECT_TRUE(URIUtils::ProtocolHasEncodedHostname("rar"));
-  EXPECT_TRUE(URIUtils::ProtocolHasEncodedHostname("bluray"));
-  EXPECT_TRUE(URIUtils::ProtocolHasEncodedHostname("musicsearch"));
+  EXPECT_TRUE(URIUtils::HasEncodedHostname(CURL("zip://")));
+  EXPECT_TRUE(URIUtils::HasEncodedHostname(CURL("rar://")));
+  EXPECT_TRUE(URIUtils::HasEncodedHostname(CURL("bluray://")));
+  EXPECT_TRUE(URIUtils::HasEncodedHostname(CURL("musicsearch://")));
 }
 
-TEST_F(TestURIUtils, ProtocolHasEncodedFilename)
+TEST_F(TestURIUtils, HasEncodedFilename)
 {
-  EXPECT_TRUE(URIUtils::ProtocolHasEncodedFilename("shout"));
-  EXPECT_TRUE(URIUtils::ProtocolHasEncodedFilename("daap"));
-  EXPECT_TRUE(URIUtils::ProtocolHasEncodedFilename("dav"));
-  EXPECT_TRUE(URIUtils::ProtocolHasEncodedFilename("tuxbox"));
-  EXPECT_TRUE(URIUtils::ProtocolHasEncodedFilename("rss"));
-  EXPECT_TRUE(URIUtils::ProtocolHasEncodedFilename("davs"));
+  EXPECT_TRUE(URIUtils::HasEncodedFilename(CURL("shout://")));
+  EXPECT_TRUE(URIUtils::HasEncodedFilename(CURL("dav://")));
+  EXPECT_TRUE(URIUtils::HasEncodedFilename(CURL("rss://")));
+  EXPECT_TRUE(URIUtils::HasEncodedFilename(CURL("davs://")));
 }
 
 TEST_F(TestURIUtils, GetRealPath)
@@ -534,8 +552,8 @@ TEST_F(TestURIUtils, GetRealPath)
   EXPECT_STRCASEEQ(ref.c_str(), URIUtils::GetRealPath("rar://%2fpath%2fto%2fsome%2f..%2frar/subpath/to/file").c_str());
 
   // test rar/zip path in rar/zip path
-  ref ="zip://rar%3A%2F%2F%252Fpath%252Fto%252Frar%2Fpath%2Fto%2Fzip/subpath/to/file";
-  EXPECT_STRCASEEQ(ref.c_str(), URIUtils::GetRealPath("zip://rar%3A%2F%2F%252Fpath%252Fto%252Fsome%252F..%252Frar%2Fpath%2Fto%2Fsome%2F..%2Fzip/subpath/to/some/../file").c_str());
+  ref ="zip://rar%3a%2f%2f%252Fpath%252Fto%252Frar%2fpath%2fto%2fzip/subpath/to/file";
+  EXPECT_STRCASEEQ(ref.c_str(), URIUtils::GetRealPath("zip://rar%3a%2f%2f%252Fpath%252Fto%252Fsome%252F..%252Frar%2fpath%2fto%2fsome%2f..%2fzip/subpath/to/some/../file").c_str());
 }
 
 TEST_F(TestURIUtils, UpdateUrlEncoding)

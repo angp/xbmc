@@ -18,12 +18,7 @@
  *
  */
 
-#define BOOL XBMC_BOOL
-#include "system.h"
-#include "utils/log.h"
-#include "windowing/WinEventsSDL.h"
 #include "windowing/osx/WinEventsOSX.h"
-#undef BOOL
 
 // place holder for future native osx event handler
 
@@ -33,9 +28,4 @@ CWinEventsOSX::CWinEventsOSX()
 
 CWinEventsOSX::~CWinEventsOSX()
 {
-}
-
-bool CWinEventsOSX::MessagePump()
-{
-  return CWinEventsSDL::MessagePump();
 }

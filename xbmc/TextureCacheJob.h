@@ -20,7 +20,11 @@
 
 #pragma once
 
-#include "utils/StdString.h"
+#include <stdint.h>
+#include <string>
+#include <vector>
+
+#include "pictures/PictureScalingAlgorithm.h"
 #include "utils/Job.h"
 
 class CBaseTexture;
@@ -61,12 +65,12 @@ public:
 class CTextureCacheJob : public CJob
 {
 public:
-  CTextureCacheJob(const CStdString &url, const CStdString &oldHash = "");
-  virtual ~CTextureCacheJob();
+  CTextureCacheJob(const std::string &url, const std::string &oldHash = "");
+  ~CTextureCacheJob() override;
 
-  virtual const char* GetType() const { return kJobTypeCacheImage; };
-  virtual bool operator==(const CJob *job) const;
-  virtual bool DoWork();
+  const char* GetType() const override { return kJobTypeCacheImage; };
+  bool operator==(const CJob *job) const override;
+  bool DoWork() override;
 
   /*! \brief retrieve a hash for the given image
    Combines the size, ctime and mtime of the image file into a "unique" hash
@@ -75,36 +79,37 @@ public:
    */
   bool CacheTexture(CBaseTexture **texture = NULL);
 
-  CStdString m_url;
-  CStdString m_oldHash;
+  static bool ResizeTexture(const std::string &url, uint8_t* &result, size_t &result_size);
+
+  std::string m_url;
+  std::string m_oldHash;
   CTextureDetails m_details;
 private:
-  friend class CEdenVideoArtUpdater;
-
   /*! \brief retrieve a hash for the given image
    Combines the size, ctime and mtime of the image file into a "unique" hash
    \param url location of the image
    \return a hash string for this image
    */
-  static CStdString GetImageHash(const CStdString &url);
+  static std::string GetImageHash(const std::string &url);
 
   /*! \brief Check whether a given URL represents an image that can be updated
    We currently don't check http:// and https:// URLs for updates, under the assumption that
    a image URL is much more likely to be static and the actual image at the URL is unlikely
    to change, so no point checking all the time.
    \param url the url to check
-   \return true if the image given by the URL should be checked for updates, false otehrwise
+   \return true if the image given by the URL should be checked for updates, false otherwise
    */
-  bool UpdateableURL(const CStdString &url) const;
+  bool UpdateableURL(const std::string &url) const;
 
   /*! \brief Decode an image URL to the underlying image, width, height and orientation
    \param url wrapped URL of the image
    \param width width derived from URL
    \param height height derived from URL
+   \param scalingAlgorithm scaling algorithm derived from URL
    \param additional_info additional information, such as "flipped" to flip horizontally
    \return URL of the underlying image file.
    */
-  static CStdString DecodeImageURL(const CStdString &url, unsigned int &width, unsigned int &height, std::string &additional_info);
+  static std::string DecodeImageURL(const std::string &url, unsigned int &width, unsigned int &height, CPictureScalingAlgorithm::Algorithm& scalingAlgorithm, std::string &additional_info);
 
   /*! \brief Load an image at a given target size and orientation.
 
@@ -117,23 +122,9 @@ private:
    \param additional_info extra info for loading, such as whether to flip horizontally.
    \return a pointer to a CBaseTexture object, NULL if failed.
    */
-  static CBaseTexture *LoadImage(const CStdString &image, unsigned int width, unsigned int height, const std::string &additional_info);
+  static CBaseTexture *LoadImage(const std::string &image, unsigned int width, unsigned int height, const std::string &additional_info, bool requirePixels = false);
 
-  CStdString    m_cachePath;
-};
-
-/* \brief Job class for creating .dds versions of textures
- */
-class CTextureDDSJob : public CJob
-{
-public:
-  CTextureDDSJob(const CStdString &original);
-
-  virtual const char* GetType() const { return kJobTypeDDSCompress; };
-  virtual bool operator==(const CJob *job) const;
-  virtual bool DoWork();
-
-  CStdString m_original;
+  std::string    m_cachePath;
 };
 
 /* \brief Job class for storing the use count of textures
@@ -141,11 +132,11 @@ public:
 class CTextureUseCountJob : public CJob
 {
 public:
-  CTextureUseCountJob(const std::vector<CTextureDetails> &textures);
+  explicit CTextureUseCountJob(const std::vector<CTextureDetails> &textures);
 
-  virtual const char* GetType() const { return "usecount"; };
-  virtual bool operator==(const CJob *job) const;
-  virtual bool DoWork();
+  const char* GetType() const override { return "usecount"; };
+  bool operator==(const CJob *job) const override;
+  bool DoWork() override;
 
 private:
   std::vector<CTextureDetails> m_textures;

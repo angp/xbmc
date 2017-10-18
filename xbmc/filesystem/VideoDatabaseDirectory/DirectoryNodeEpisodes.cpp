@@ -24,7 +24,7 @@
 
 using namespace XFILE::VIDEODATABASEDIRECTORY;
 
-CDirectoryNodeEpisodes::CDirectoryNodeEpisodes(const CStdString& strName, CDirectoryNode* pParent)
+CDirectoryNodeEpisodes::CDirectoryNodeEpisodes(const std::string& strName, CDirectoryNode* pParent)
   : CDirectoryNode(NODE_TYPE_EPISODES, strName, pParent)
 {
 
@@ -48,4 +48,9 @@ bool CDirectoryNodeEpisodes::GetContent(CFileItemList& items) const
   videodatabase.Close();
 
   return bSuccess;
+}
+
+NODE_TYPE CDirectoryNodeEpisodes::GetChildType() const
+{
+  return NODE_TYPE_EPISODES;
 }

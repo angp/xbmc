@@ -20,40 +20,26 @@
  *
  */
 
-#include "StdString.h"
-#include "threads/Thread.h"
+#include <memory>
+#include <string>
 
-class CGUITextLayout;
 class CGUIImage;
+class CGUITextLayout;
 
-class CSplash : public CThread
+class CSplash
 {
 public:
-  CSplash(const CStdString& imageName);
-  virtual ~CSplash();
+  static CSplash& GetInstance();
 
-  bool Start();
-  void Stop();
+  void Show(const std::string& message = "");
 
-  // In case you don't want to use another thread
-  void Show();
-  void Show(const CStdString& message);
-  void Hide();
+protected:
+  CSplash();
+  CSplash(const CSplash&) = delete;
+  CSplash& operator=(CSplash const&) = delete;
+  virtual ~CSplash() = default;
 
 private:
-  virtual void Process();
-  virtual void OnStartup();
-  virtual void OnExit();
-
-  float fade;
-  CStdString m_ImageName;
-
-  CGUITextLayout* m_messageLayout;
-  CGUIImage* m_image;
-  bool m_layoutWasLoading;
-#ifdef HAS_DX
-  D3DGAMMARAMP newRamp;
-  D3DGAMMARAMP oldRamp;
-
-#endif
+  std::unique_ptr<CGUIImage> m_image;
+  std::unique_ptr<CGUITextLayout> m_messageLayout;
 };

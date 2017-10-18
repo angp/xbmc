@@ -19,49 +19,54 @@
  *
  */
 
-#include "guilib/GUIDialog.h"
-#include "view/GUIViewControl.h"
-#include "utils/Observer.h"
-#include "pvr/channels/PVRChannelGroupsContainer.h"
 #include <map>
+
+#include "guilib/GUIDialog.h"
+#include "utils/Observer.h"
+#include "view/GUIViewControl.h"
+
+#include "pvr/PVRChannelNumberInputHandler.h"
+#include "pvr/channels/PVRChannelGroupsContainer.h"
 
 class CFileItemList;
 
 namespace PVR
 {
-  class CGUIDialogPVRChannelsOSD : public CGUIDialog, public Observer
+  class CGUIDialogPVRChannelsOSD : public CGUIDialog, public Observer, public CPVRChannelNumberInputHandler
   {
   public:
     CGUIDialogPVRChannelsOSD(void);
-    virtual ~CGUIDialogPVRChannelsOSD(void);
-    virtual bool OnMessage(CGUIMessage& message);
-    virtual bool OnAction(const CAction &action);
-    virtual void OnWindowLoaded();
-    virtual void OnWindowUnload();
-    virtual void Notify(const Observable &obs, const ObservableMessage msg);
+    ~CGUIDialogPVRChannelsOSD(void) override;
+    bool OnMessage(CGUIMessage& message) override;
+    bool OnAction(const CAction &action) override;
+    void OnWindowLoaded() override;
+    void OnWindowUnload() override;
+    void Notify(const Observable &obs, const ObservableMessage msg) override;
+
+    // CPVRChannelNumberInputHandler implementation
+    void OnInputDone() override;
 
   protected:
-    virtual void OnInitWindow();
-    virtual void OnDeinitWindow(int nextWindowID);
-    virtual void RestoreControlStates();
-    virtual void SaveControlStates();
+    void OnInitWindow() override;
+    void OnDeinitWindow(int nextWindowID) override;
+    void RestoreControlStates() override;
+    void SaveControlStates() override;
+    void SetInvalid() override;
+    CGUIControl *GetFirstFocusableControl(int id) override;
 
-    void CloseOrSelect(unsigned int iItem);
+  private:
     void GotoChannel(int iItem);
     void ShowInfo(int item);
     void Clear();
     void Update();
-    CPVRChannelGroupPtr GetPlayingGroup();
-    CGUIControl *GetFirstFocusableControl(int id);
+    void SaveSelectedItemPath(int iGroupID);
+    std::string GetLastSelectedItemPath(int iGroupID) const;
 
-    CFileItemList    *m_vecItems;
-    CGUIViewControl   m_viewControl;
-
-  private:
+    CFileItemList *m_vecItems;
+    CGUIViewControl m_viewControl;
     CPVRChannelGroupPtr m_group;
-    std::map<int,int> m_groupSelectedItems;
-    void SaveSelectedItem(int iGroupID);
-    int GetLastSelectedItem(int iGroupID) const;
+    std::map<int, std::string> m_groupSelectedItemPaths;
+    XbmcThreads::EndTime m_refreshTimeout;
   };
 }
 

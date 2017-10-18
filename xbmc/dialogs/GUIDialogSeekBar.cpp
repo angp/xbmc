@@ -18,29 +18,23 @@
  *
  */
 
+#include <math.h>
+
 #include "GUIDialogSeekBar.h"
-#include "guilib/GUISliderControl.h"
 #include "Application.h"
 #include "GUIInfoManager.h"
-#include "utils/TimeUtils.h"
-#include "FileItem.h"
 #include "utils/SeekHandler.h"
 
-#define SEEK_BAR_DISPLAY_TIME 2000L
-#define SEEK_BAR_SEEK_TIME     500L
-
-#define POPUP_SEEK_SLIDER       401
+#define POPUP_SEEK_PROGRESS     401
 #define POPUP_SEEK_LABEL        402
 
 CGUIDialogSeekBar::CGUIDialogSeekBar(void)
-    : CGUIDialog(WINDOW_DIALOG_SEEK_BAR, "DialogSeekBar.xml")
+  : CGUIDialog(WINDOW_DIALOG_SEEK_BAR, "DialogSeekBar.xml", DialogModalityType::MODELESS)
 {
   m_loadType = LOAD_ON_GUI_INIT;    // the application class handles our resources
 }
 
-CGUIDialogSeekBar::~CGUIDialogSeekBar(void)
-{
-}
+CGUIDialogSeekBar::~CGUIDialogSeekBar(void) = default;
 
 bool CGUIDialogSeekBar::OnMessage(CGUIMessage& message)
 {
@@ -51,11 +45,16 @@ bool CGUIDialogSeekBar::OnMessage(CGUIMessage& message)
     return CGUIDialog::OnMessage(message);
 
   case GUI_MSG_LABEL_SET:
-    {
-      if (message.GetSenderId() == GetID() && message.GetControlId() == POPUP_SEEK_LABEL)
-        CGUIDialog::OnMessage(message);
-    }
+    if (message.GetSenderId() == GetID() && message.GetControlId() == POPUP_SEEK_LABEL)
+      return CGUIDialog::OnMessage(message);
     break;
+
+  case GUI_MSG_ITEM_SELECT:
+    if (message.GetSenderId() == GetID() && message.GetControlId() == POPUP_SEEK_PROGRESS)
+      return CGUIDialog::OnMessage(message);
+    break;
+  case GUI_MSG_REFRESH_TIMER:
+    return CGUIDialog::OnMessage(message);
   }
   return false; // don't process anything other than what we need!
 }
@@ -68,27 +67,12 @@ void CGUIDialogSeekBar::FrameMove()
     return;
   }
 
-  // update controls
-  if (!g_application.GetSeekHandler()->InProgress() && !g_infoManager.m_performingSeek)
-  { // position the bar at our current time
-    CGUISliderControl *pSlider = (CGUISliderControl*)GetControl(POPUP_SEEK_SLIDER);
-    if (pSlider && g_infoManager.GetTotalPlayTime())
-      pSlider->SetPercentage((float)g_infoManager.GetPlayTime()/g_infoManager.GetTotalPlayTime() * 0.1f);
+  unsigned int percent((!CSeekHandler::GetInstance().InProgress() && g_infoManager.GetTotalPlayTime())
+    ? lrintf(g_application.GetPercentage())
+    : (unsigned int)g_infoManager.GetSeekPercent());
 
-    CGUIMessage msg(GUI_MSG_LABEL_SET, GetID(), POPUP_SEEK_LABEL);
-    msg.SetLabel(g_infoManager.GetCurrentPlayTime());
-    OnMessage(msg);
-  }
-  else
-  {
-    CGUISliderControl *pSlider = (CGUISliderControl*)GetControl(POPUP_SEEK_SLIDER);
-    if (pSlider)
-      pSlider->SetPercentage(g_application.GetSeekHandler()->GetPercent());
-
-    CGUIMessage msg(GUI_MSG_LABEL_SET, GetID(), POPUP_SEEK_LABEL);
-    msg.SetLabel(g_infoManager.GetCurrentSeekTime());
-    OnMessage(msg);
-  }
+  if (percent != m_lastPercent)
+    CONTROL_SELECT_ITEM(POPUP_SEEK_PROGRESS, m_lastPercent = percent);
 
   CGUIDialog::FrameMove();
 }

@@ -19,36 +19,44 @@
  *
  */
 
-#include "threads/CriticalSection.h"
-#include "utils/Observer.h"
-#include "threads/Thread.h"
-#include "addons/include/xbmc_pvr_types.h"
+#include <atomic>
+#include <string>
+#include <vector>
 
-namespace EPG
-{
-  class CEpgInfoTag;
-}
+#include "addons/kodi-addon-dev-kit/include/kodi/xbmc_pvr_types.h"
+#include "threads/CriticalSection.h"
+#include "threads/Thread.h"
+#include "utils/Observer.h"
+
+#include "pvr/PVRTypes.h"
+#include "pvr/addons/PVRClients.h"
 
 namespace PVR
 {
-  class CPVRTimerInfoTag;
-  class CPVRRecording;
-
   class CPVRGUIInfo : private CThread,
                       private Observer
   {
   public:
     CPVRGUIInfo(void);
-    virtual ~CPVRGUIInfo(void);
+    ~CPVRGUIInfo(void) override;
 
     void Start(void);
     void Stop(void);
 
-    void Notify(const Observable &obs, const ObservableMessage msg);
+    void Notify(const Observable &obs, const ObservableMessage msg) override;
 
     bool TranslateBoolInfo(DWORD dwInfo) const;
-    bool TranslateCharInfo(DWORD dwInfo, CStdString &strValue) const;
+    bool TranslateCharInfo(DWORD dwInfo, std::string &strValue) const;
     int TranslateIntInfo(DWORD dwInfo) const;
+
+    /*!
+     * @brief Get a GUIInfoManager video label.
+     * @param item The item to get the label for.
+     * @param iLabel The id of the requested label.
+     * @param strValue Will be filled with the requested label value.
+     * @return True if the requested label value was set, false otherwise.
+     */
+    bool GetVideoLabel(const CFileItem &item, int iLabel, std::string &strValue) const;
 
     /*!
      * @brief Get the total duration of the currently playing LiveTV item.
@@ -63,109 +71,207 @@ namespace PVR
     int GetStartTime(void) const;
 
     /*!
-     * @brief Show the player info.
-     * @param iTimeout Hide the player info after iTimeout seconds.
-     * @todo not really the right place for this :-)
-     */
-    void ShowPlayerInfo(int iTimeout);
-
-    /*!
      * @brief Clear the playing EPG tag.
      */
     void ResetPlayingTag(void);
 
-    bool GetPlayingTag(EPG::CEpgInfoTag &tag) const;
+    /*!
+     * @brief Get the currently playing EPG tag.
+     * @return The currently playing EPG tag or NULL if no EPG tag is playing.
+     */
+    CPVREpgInfoTagPtr GetPlayingTag() const;
+
+    /*!
+     * @brief Get playing TV group.
+     * @return The currently playing TV group or NULL if no TV group is playing.
+     */
+    std::string GetPlayingTVGroup();
 
   private:
+    class TimerInfo
+    {
+    public:
+      TimerInfo();
+      virtual ~TimerInfo() = default;
+
+      void ResetProperties();
+
+      void UpdateTimersCache();
+      void UpdateTimersToggle();
+      void UpdateNextTimer();
+
+      void CharInfoActiveTimerTitle(std::string &strValue) const { strValue = m_strActiveTimerTitle; }
+      void CharInfoActiveTimerChannelName(std::string &strValue) const { strValue = m_strActiveTimerChannelName; }
+      void CharInfoActiveTimerChannelIcon(std::string &strValue) const { strValue = m_strActiveTimerChannelIcon; }
+      void CharInfoActiveTimerDateTime(std::string &strValue) const { strValue = m_strActiveTimerTime; }
+      void CharInfoNextTimerTitle(std::string &strValue) const { strValue = m_strNextRecordingTitle; }
+      void CharInfoNextTimerChannelName(std::string &strValue) const { strValue = m_strNextRecordingChannelName; }
+      void CharInfoNextTimerChannelIcon(std::string &strValue) const { strValue = m_strNextRecordingChannelIcon; }
+      void CharInfoNextTimerDateTime(std::string &strValue) const { strValue = m_strNextRecordingTime; }
+      void CharInfoNextTimer(std::string &strValue) const { strValue = m_strNextTimerInfo; }
+
+      bool HasTimers() const { return m_iTimerAmount > 0; }
+      bool HasRecordingTimers() const { return m_iRecordingTimerAmount > 0; }
+      bool HasNonRecordingTimers() const { return m_iTimerAmount - m_iRecordingTimerAmount > 0; }
+
+    private:
+      bool TimerInfoToggle();
+
+      virtual int AmountActiveTimers() = 0;
+      virtual int AmountActiveRecordings() = 0;
+      virtual std::vector<CFileItemPtr> GetActiveRecordings() = 0;
+      virtual CFileItemPtr GetNextActiveTimer() = 0;
+
+      unsigned int m_iTimerAmount;
+      unsigned int m_iRecordingTimerAmount;
+
+      std::string m_strActiveTimerTitle;
+      std::string m_strActiveTimerChannelName;
+      std::string m_strActiveTimerChannelIcon;
+      std::string m_strActiveTimerTime;
+      std::string m_strNextRecordingTitle;
+      std::string m_strNextRecordingChannelName;
+      std::string m_strNextRecordingChannelIcon;
+      std::string m_strNextRecordingTime;
+      std::string m_strNextTimerInfo;
+
+      unsigned int m_iTimerInfoToggleStart;
+      unsigned int m_iTimerInfoToggleCurrent;
+
+      CCriticalSection m_critSection;
+    };
+
+    class AnyTimerInfo : public TimerInfo
+    {
+    public:
+      AnyTimerInfo() = default;
+
+    private:
+      int AmountActiveTimers() override;
+      int AmountActiveRecordings() override;
+      std::vector<CFileItemPtr> GetActiveRecordings() override;
+      CFileItemPtr GetNextActiveTimer() override;
+    };
+
+    class TVTimerInfo : public TimerInfo
+    {
+    public:
+      TVTimerInfo() = default;
+
+    private:
+      int AmountActiveTimers() override;
+      int AmountActiveRecordings() override;
+      std::vector<CFileItemPtr> GetActiveRecordings() override;
+      CFileItemPtr GetNextActiveTimer() override;
+    };
+
+    class RadioTimerInfo : public TimerInfo
+    {
+    public:
+      RadioTimerInfo() = default;
+
+    private:
+      int AmountActiveTimers() override;
+      int AmountActiveRecordings() override;
+      std::vector<CFileItemPtr> GetActiveRecordings() override;
+      CFileItemPtr GetNextActiveTimer() override;
+    };
+
     void ResetProperties(void);
     void ClearQualityInfo(PVR_SIGNAL_STATUS &qualityInfo);
-    void Process(void);
+    void ClearDescrambleInfo(PVR_DESCRAMBLE_INFO &descrambleInfo);
+
+    void Process(void) override;
 
     void UpdatePlayingTag(void);
     void UpdateTimersCache(void);
     void UpdateBackendCache(void);
     void UpdateQualityData(void);
+    void UpdateDescrambleData(void);
     void UpdateMisc(void);
     void UpdateNextTimer(void);
+    void UpdateTimeshift(void);
 
-    bool AddonInfoToggle(void);
-    bool TimerInfoToggle(void);
     void UpdateTimersToggle(void);
-    void ToggleShowInfo(void);
 
-    void CharInfoActiveTimerTitle(CStdString &strValue) const;
-    void CharInfoActiveTimerChannelName(CStdString &strValue) const;
-    void CharInfoActiveTimerChannelIcon(CStdString &strValue) const;
-    void CharInfoActiveTimerDateTime(CStdString &strValue) const;
-    void CharInfoNextTimerTitle(CStdString &strValue) const;
-    void CharInfoNextTimerChannelName(CStdString &strValue) const;
-    void CharInfoNextTimerChannelIcon(CStdString &strValue) const;
-    void CharInfoNextTimerDateTime(CStdString &strValue) const;
-    void CharInfoPlayingDuration(CStdString &strValue) const;
-    void CharInfoPlayingTime(CStdString &strValue) const;
-    void CharInfoNextTimer(CStdString &strValue) const;
-    void CharInfoBackendNumber(CStdString &strValue) const;
-    void CharInfoTotalDiskSpace(CStdString &strValue) const;
-    void CharInfoVideoBR(CStdString &strValue) const;
-    void CharInfoAudioBR(CStdString &strValue) const;
-    void CharInfoDolbyBR(CStdString &strValue) const;
-    void CharInfoSignal(CStdString &strValue) const;
-    void CharInfoSNR(CStdString &strValue) const;
-    void CharInfoBER(CStdString &strValue) const;
-    void CharInfoUNC(CStdString &strValue) const;
-    void CharInfoFrontendName(CStdString &strValue) const;
-    void CharInfoFrontendStatus(CStdString &strValue) const;
-    void CharInfoBackendName(CStdString &strValue) const;
-    void CharInfoBackendVersion(CStdString &strValue) const;
-    void CharInfoBackendHost(CStdString &strValue) const;
-    void CharInfoBackendDiskspace(CStdString &strValue) const;
-    void CharInfoBackendChannels(CStdString &strValue) const;
-    void CharInfoBackendTimers(CStdString &strValue) const;
-    void CharInfoBackendRecordings(CStdString &strValue) const;
-    void CharInfoPlayingClientName(CStdString &strValue) const;
-    void CharInfoEncryption(CStdString &strValue) const;
+    void CharInfoPlayingDuration(std::string &strValue) const;
+    void CharInfoPlayingTime(std::string &strValue) const;
+    void CharInfoBackendNumber(std::string &strValue) const;
+    void CharInfoTotalDiskSpace(std::string &strValue) const;
+    void CharInfoSignal(std::string &strValue) const;
+    void CharInfoSNR(std::string &strValue) const;
+    void CharInfoBER(std::string &strValue) const;
+    void CharInfoUNC(std::string &strValue) const;
+    void CharInfoFrontendName(std::string &strValue) const;
+    void CharInfoFrontendStatus(std::string &strValue) const;
+    void CharInfoBackendName(std::string &strValue) const;
+    void CharInfoBackendVersion(std::string &strValue) const;
+    void CharInfoBackendHost(std::string &strValue) const;
+    void CharInfoBackendDiskspace(std::string &strValue) const;
+    void CharInfoBackendChannels(std::string &strValue) const;
+    void CharInfoBackendTimers(std::string &strValue) const;
+    void CharInfoBackendRecordings(std::string &strValue) const;
+    void CharInfoBackendDeletedRecordings(std::string &strValue) const;
+    void CharInfoPlayingClientName(std::string &strValue) const;
+    void CharInfoEncryption(std::string &strValue) const;
+    void CharInfoService(std::string &strValue) const;
+    void CharInfoMux(std::string &strValue) const;
+    void CharInfoProvider(std::string &strValue) const;
+    void CharInfoTimeshiftStartTime(std::string &strValue) const;
+    void CharInfoTimeshiftEndTime(std::string &strValue) const;
+    void CharInfoTimeshiftPlayTime(std::string &strValue) const;
 
     /** @name GUIInfoManager data */
     //@{
-    CStdString                      m_strActiveTimerTitle;
-    CStdString                      m_strActiveTimerChannelName;
-    CStdString                      m_strActiveTimerChannelIcon;
-    CStdString                      m_strActiveTimerTime;
-    CStdString                      m_strNextTimerInfo;
-    CStdString                      m_strNextRecordingTitle;
-    CStdString                      m_strNextRecordingChannelName;
-    CStdString                      m_strNextRecordingChannelIcon;
-    CStdString                      m_strNextRecordingTime;
-    bool                            m_bHasRecordings;
-    unsigned int                    m_iTimerAmount;
-    unsigned int                    m_iRecordingTimerAmount;
-    int                             m_iActiveClients;
-    CStdString                      m_strPlayingClientName;
-    CStdString                      m_strBackendName;
-    CStdString                      m_strBackendVersion;
-    CStdString                      m_strBackendHost;
-    CStdString                      m_strBackendDiskspace;
-    CStdString                      m_strBackendTimers;
-    CStdString                      m_strBackendRecordings;
-    CStdString                      m_strBackendChannels;
-    CStdString                      m_strTotalDiskspace;
-    unsigned int                    m_iDuration;
+    AnyTimerInfo   m_anyTimersInfo; // tv + radio
+    TVTimerInfo    m_tvTimersInfo;
+    RadioTimerInfo m_radioTimersInfo;
 
-    bool                            m_bHasNonRecordingTimers;
+    bool                            m_bHasTVRecordings;
+    bool                            m_bHasRadioRecordings;
+    unsigned int                    m_iCurrentActiveClient;
+    std::string                     m_strPlayingClientName;
+    std::string                     m_strBackendName;
+    std::string                     m_strBackendVersion;
+    std::string                     m_strBackendHost;
+    std::string                     m_strBackendTimers;
+    std::string                     m_strBackendRecordings;
+    std::string                     m_strBackendDeletedRecordings;
+    std::string                     m_strBackendChannels;
+    long long                       m_iBackendDiskTotal;
+    long long                       m_iBackendDiskUsed;
+    unsigned int                    m_iDuration;
     bool                            m_bIsPlayingTV;
     bool                            m_bIsPlayingRadio;
     bool                            m_bIsPlayingRecording;
+    bool                            m_bIsPlayingEpgTag;
     bool                            m_bIsPlayingEncryptedStream;
+    bool                            m_bHasTVChannels;
+    bool                            m_bHasRadioChannels;
+    std::string                     m_strPlayingTVGroup;
     //@}
 
     PVR_SIGNAL_STATUS               m_qualityInfo;       /*!< stream quality information */
-    unsigned int                    m_iAddonInfoToggleStart;
-    unsigned int                    m_iAddonInfoToggleCurrent;
-    unsigned int                    m_iTimerInfoToggleStart;
-    unsigned int                    m_iTimerInfoToggleCurrent;
-    unsigned int                    m_iToggleShowInfo;
-    EPG::CEpgInfoTag *              m_playingEpgTag;
+    PVR_DESCRAMBLE_INFO             m_descrambleInfo;    /*!< stream descramble information */
+    CPVREpgInfoTagPtr               m_playingEpgTag;
+    std::vector<SBackend>           m_backendProperties;
+
+    bool                            m_bIsTimeshifting;
+    time_t                          m_iTimeshiftStartTime;
+    time_t                          m_iTimeshiftEndTime;
+    time_t                          m_iTimeshiftPlayTime;
+    std::string                     m_strTimeshiftStartTime;
+    std::string                     m_strTimeshiftEndTime;
+    std::string                     m_strTimeshiftPlayTime;
 
     CCriticalSection                m_critSection;
+
+    /**
+     * The various backend-related fields will only be updated when this
+     * flag is set. This is done to limit the amount of unnecessary
+     * backend querying when we're not displaying any of the queried
+     * information.
+     */
+    mutable std::atomic<bool>       m_updateBackendCacheRequested;
   };
 }

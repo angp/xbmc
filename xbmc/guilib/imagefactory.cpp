@@ -19,8 +19,16 @@
  */
 
 #include "imagefactory.h"
-#include "guilib/JpegIO.h"
-#include "guilib/cximage.h"
+#include "guilib/FFmpegImage.h"
+#include "addons/ImageDecoder.h"
+#include "addons/binary-addons/BinaryAddonBase.h"
+#include "utils/Mime.h"
+#include "utils/StringUtils.h"
+#include "ServiceBroker.h"
+
+#include <algorithm>
+
+using namespace ADDON;
 
 IImage* ImageFactory::CreateLoader(const std::string& strFileName)
 {
@@ -30,22 +38,27 @@ IImage* ImageFactory::CreateLoader(const std::string& strFileName)
 
 IImage* ImageFactory::CreateLoader(const CURL& url)
 {
-  return CreateLoaderFromMimeType("image/"+url.GetFileType());
+  if(!url.GetFileType().empty())
+    return CreateLoaderFromMimeType("image/"+url.GetFileType());
+
+  return CreateLoaderFromMimeType(CMime::GetMimeType(url));
 }
 
 IImage* ImageFactory::CreateLoaderFromMimeType(const std::string& strMimeType)
 {
-  if(strMimeType == "image/jpeg" || strMimeType == "image/tbn" || strMimeType == "image/jpg")
-    return new CJpegIO();
-  return new CXImage(strMimeType);
-}
+  BinaryAddonBaseList addonInfos;
 
-IImage* ImageFactory::CreateFallbackLoader(const std::string& strMimeType)
-{
-  return new CXImage(strMimeType);
-}
+  CServiceBroker::GetBinaryAddonManager().GetAddonInfos(addonInfos, true, ADDON_IMAGEDECODER);
+  for (auto addonInfo : addonInfos)
+  {
+    std::vector<std::string> mime = StringUtils::Split(addonInfo->Type(ADDON_IMAGEDECODER)->GetValue("@mimetype").asString(), "|");
+    if (std::find(mime.begin(), mime.end(), strMimeType) != mime.end())
+    {
+      CImageDecoder* result = new CImageDecoder(addonInfo);
+      result->Create(strMimeType);
+      return result;
+    }
+  }
 
-IImage* ImageFactory::CreateFallbackLoader(const CURL& url)
-{
-  return new CXImage("image/"+url.GetFileType());
+  return new CFFmpegImage(strMimeType);
 }

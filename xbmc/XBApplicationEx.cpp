@@ -19,6 +19,9 @@
  */
 
 #include "system.h"
+#include "FileItem.h"
+#include "messaging/ApplicationMessenger.h"
+#include "PlayListPlayer.h"
 #include "XBApplicationEx.h"
 #include "utils/log.h"
 #include "threads/SystemClock.h"
@@ -28,6 +31,10 @@
 #define MEASURE_FUNCTION
 #endif
 #include "commons/Exception.h"
+#ifdef TARGET_POSIX
+#include "linux/XTimeUtils.h"
+#endif
+#include "AppParamParser.h"
 
 // Put this here for easy enable and disable
 #ifndef _DEBUG
@@ -43,27 +50,7 @@ CXBApplicationEx::CXBApplicationEx()
   m_renderGUI = false;
 }
 
-CXBApplicationEx::~CXBApplicationEx()
-{
-}
-
-/* Create the app */
-bool CXBApplicationEx::Create()
-{
-  // Variables to perform app timing
-  m_bStop = false;
-  m_AppFocused = true;
-  m_ExitCode = EXITCODE_QUIT;
-
-  // Initialize the app's device-dependent objects
-  if (!Initialize())
-  {
-    CLog::Log(LOGERROR, "XBAppEx: Call to Initialize() failed!" );
-    return false;
-  }
-
-  return true;
-}
+CXBApplicationEx::~CXBApplicationEx() = default;
 
 /* Destroy the app */
 VOID CXBApplicationEx::Destroy()
@@ -74,7 +61,7 @@ VOID CXBApplicationEx::Destroy()
 }
 
 /* Function that runs the application */
-INT CXBApplicationEx::Run()
+INT CXBApplicationEx::Run(const CAppParamParser &params)
 {
   CLog::Log(LOGNOTICE, "Running the application..." );
 
@@ -82,12 +69,12 @@ INT CXBApplicationEx::Run()
   unsigned int frameTime = 0;
   const unsigned int noRenderFrameTime = 15;  // Simulates ~66fps
 
-#ifdef XBMC_TRACK_EXCEPTIONS
-  BYTE processExceptionCount = 0;
-  BYTE frameMoveExceptionCount = 0;
-  BYTE renderExceptionCount = 0;
-  const BYTE MAX_EXCEPTION_COUNT = 10;
-#endif
+  if (params.Playlist().Size() > 0)
+  {
+    CServiceBroker::GetPlaylistPlayer().Add(0, params.Playlist());
+    CServiceBroker::GetPlaylistPlayer().SetCurrentPlaylist(0);
+    KODI::MESSAGING::CApplicationMessenger::GetInstance().PostMsg(TMSG_PLAYLISTPLAYER_PLAY, -1);
+  }
 
   // Run xbmc
   while (!m_bStop)
@@ -106,30 +93,17 @@ INT CXBApplicationEx::Run()
       Process();
       //reset exception count
 #ifdef XBMC_TRACK_EXCEPTIONS
-      processExceptionCount = 0;
 
     }
     catch (const XbmcCommons::UncheckedException &e)
     {
       e.LogThrowMessage("CApplication::Process()");
-      processExceptionCount++;
-      //MAX_EXCEPTION_COUNT exceptions in a row? -> bail out
-      if (processExceptionCount > MAX_EXCEPTION_COUNT)
-      {
-        CLog::Log(LOGERROR, "CApplication::Process(), too many exceptions");
-        throw;
-      }
+      throw;
     }
     catch (...)
     {
       CLog::Log(LOGERROR, "exception in CApplication::Process()");
-      processExceptionCount++;
-      //MAX_EXCEPTION_COUNT exceptions in a row? -> bail out
-      if (processExceptionCount > MAX_EXCEPTION_COUNT)
-      {
-        CLog::Log(LOGERROR, "CApplication::Process(), too many exceptions");
-        throw;
-      }
+      throw;
     }
 #endif
     // Frame move the scene
@@ -137,33 +111,23 @@ INT CXBApplicationEx::Run()
     try
     {
 #endif
-      if (!m_bStop) FrameMove(true, m_renderGUI);
+      if (!m_bStop)
+      {
+        FrameMove(true, m_renderGUI);
+      }
+
       //reset exception count
 #ifdef XBMC_TRACK_EXCEPTIONS
-      frameMoveExceptionCount = 0;
-
     }
     catch (const XbmcCommons::UncheckedException &e)
     {
       e.LogThrowMessage("CApplication::FrameMove()");
-      frameMoveExceptionCount++;
-      //MAX_EXCEPTION_COUNT exceptions in a row? -> bail out
-      if (frameMoveExceptionCount > MAX_EXCEPTION_COUNT)
-      {
-        CLog::Log(LOGERROR, "CApplication::FrameMove(), too many exceptions");
-        throw;
-      }
+      throw;
     }
     catch (...)
     {
       CLog::Log(LOGERROR, "exception in CApplication::FrameMove()");
-      frameMoveExceptionCount++;
-      //MAX_EXCEPTION_COUNT exceptions in a row? -> bail out
-      if (frameMoveExceptionCount > MAX_EXCEPTION_COUNT)
-      {
-        CLog::Log(LOGERROR, "CApplication::FrameMove(), too many exceptions");
-        throw;
-      }
+      throw;
     }
 #endif
 
@@ -172,7 +136,10 @@ INT CXBApplicationEx::Run()
     try
     {
 #endif
-      if (m_renderGUI && !m_bStop) Render();
+      if (m_renderGUI && !m_bStop)
+      {
+        Render();
+      }
       else if (!m_renderGUI)
       {
         frameTime = XbmcThreads::SystemClockMillis() - lastFrameTime;
@@ -180,31 +147,16 @@ INT CXBApplicationEx::Run()
           Sleep(noRenderFrameTime - frameTime);
       }
 #ifdef XBMC_TRACK_EXCEPTIONS
-      //reset exception count
-      renderExceptionCount = 0;
-
     }
     catch (const XbmcCommons::UncheckedException &e)
     {
       e.LogThrowMessage("CApplication::Render()");
-      renderExceptionCount++;
-      //MAX_EXCEPTION_COUNT exceptions in a row? -> bail out
-      if (renderExceptionCount > MAX_EXCEPTION_COUNT)
-      {
-        CLog::Log(LOGERROR, "CApplication::Render(), too many exceptions");
-        throw;
-      }
+      throw;
     }
     catch (...)
     {
       CLog::Log(LOGERROR, "exception in CApplication::Render()");
-      renderExceptionCount++;
-      //MAX_EXCEPTION_COUNT exceptions in a row? -> bail out
-      if (renderExceptionCount > MAX_EXCEPTION_COUNT)
-      {
-        CLog::Log(LOGERROR, "CApplication::Render(), too many exceptions");
-        throw;
-      }
+      throw;
     }
 #endif
   } // while (!m_bStop)

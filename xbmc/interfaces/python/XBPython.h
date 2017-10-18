@@ -26,12 +26,15 @@
 #include "threads/Thread.h"
 #include "interfaces/IAnnouncer.h"
 #include "interfaces/generic/ILanguageInvocationHandler.h"
-#include "addons/IAddon.h"
+#include "ServiceBroker.h"
 
-#include <boost/shared_ptr.hpp>
+#include <memory>
 #include <vector>
 
+#define g_pythonParser CServiceBroker::GetXBPython()
+
 class CPythonInvoker;
+class CVariant;
 
 typedef struct {
   int id;
@@ -64,47 +67,45 @@ class XBPython :
 {
 public:
   XBPython();
-  virtual ~XBPython();
-  virtual void OnPlayBackEnded();
-  virtual void OnPlayBackStarted();
-  virtual void OnPlayBackPaused();
-  virtual void OnPlayBackResumed();
-  virtual void OnPlayBackStopped();
-  virtual void OnPlayBackSpeedChanged(int iSpeed);
-  virtual void OnPlayBackSeek(int iTime, int seekOffset);
-  virtual void OnPlayBackSeekChapter(int iChapter);
-  virtual void OnQueueNextItem();
+  ~XBPython() override;
+  void OnPlayBackEnded() override;
+  void OnPlayBackStarted(const CFileItem &file) override;
+  void OnPlayBackPaused() override;
+  void OnPlayBackResumed() override;
+  void OnPlayBackStopped() override;
+  void OnPlayBackError() override;
+  void OnPlayBackSpeedChanged(int iSpeed) override;
+  void OnPlayBackSeek(int64_t iTime, int64_t seekOffset) override;
+  void OnPlayBackSeekChapter(int iChapter) override;
+  void OnQueueNextItem() override;
 
-  virtual void Announce(ANNOUNCEMENT::AnnouncementFlag flag, const char *sender, const char *message, const CVariant &data);
+  void Announce(ANNOUNCEMENT::AnnouncementFlag flag, const char *sender, const char *message, const CVariant &data) override;
   void RegisterPythonPlayerCallBack(IPlayerCallback* pCallback);
   void UnregisterPythonPlayerCallBack(IPlayerCallback* pCallback);
   void RegisterPythonMonitorCallBack(XBMCAddon::xbmc::Monitor* pCallback);
   void UnregisterPythonMonitorCallBack(XBMCAddon::xbmc::Monitor* pCallback);
-  void OnSettingsChanged(const CStdString &strings);
+  void OnSettingsChanged(const std::string &strings);
   void OnScreensaverActivated();
   void OnScreensaverDeactivated();
-  void OnDatabaseUpdated(const std::string &database);
-  void OnDatabaseScanStarted(const std::string &database);
-  void OnAbortRequested(const CStdString &ID="");
+  void OnDPMSActivated();
+  void OnDPMSDeactivated();
+  void OnScanStarted(const std::string &library);
+  void OnScanFinished(const std::string &library);
+  void OnCleanStarted(const std::string &library);
+  void OnCleanFinished(const std::string &library);
+  void OnNotification(const std::string &sender, const std::string &method, const std::string &data);
 
-  virtual void Process();
-  virtual void Uninitialize();
-  virtual void OnScriptStarted(ILanguageInvoker *invoker);
-  virtual void OnScriptEnded(ILanguageInvoker *invoker);
-  virtual ILanguageInvoker* CreateInvoker();
+  void Process() override;
+  void PulseGlobalEvent() override;
+  void Uninitialize() override;
+  bool OnScriptInitialized(ILanguageInvoker *invoker) override;
+  void OnScriptStarted(ILanguageInvoker *invoker) override;
+  void OnScriptAbortRequested(ILanguageInvoker *invoker) override;
+  void OnScriptEnded(ILanguageInvoker *invoker) override;
+  void OnScriptFinalized(ILanguageInvoker *invoker) override;
+  ILanguageInvoker* CreateInvoker() override;
 
-  bool InitializeEngine();
-  void FinalizeScript();
-
-  void PulseGlobalEvent();
   bool WaitForEvent(CEvent& hEvent, unsigned int milliseconds);
-
-  // inject xbmc stuff into the interpreter.
-  // should be called for every new interpreter
-  void InitializeInterpreter(ADDON::AddonPtr addon);
-
-  // remove modules and references when interpreter done
-  void DeInitializeInterpreter();
 
   void RegisterExtensionLib(LibraryLoader *pLib);
   void UnregisterExtensionLib(LibraryLoader *pLib);
@@ -135,5 +136,3 @@ private:
   // loaded by it and unload them first (not done by finalize)
   PythonExtensionLibraries m_extensions;
 };
-
-extern XBPython g_pythonParser;

@@ -48,7 +48,8 @@ public:
     VariantTypeConstNull
   };
 
-  CVariant(VariantType type = VariantTypeNull);
+  CVariant();
+  CVariant(VariantType type);
   CVariant(int integer);
   CVariant(int64_t integer);
   CVariant(unsigned int unsignedinteger);
@@ -59,16 +60,22 @@ public:
   CVariant(const char *str);
   CVariant(const char *str, unsigned int length);
   CVariant(const std::string &str);
+  CVariant(std::string &&str);
   CVariant(const wchar_t *str);
   CVariant(const wchar_t *str, unsigned int length);
   CVariant(const std::wstring &str);
+  CVariant(std::wstring &&str);
   CVariant(const std::vector<std::string> &strArray);
   CVariant(const std::map<std::string, std::string> &strMap);
   CVariant(const std::map<std::string, CVariant> &variantMap);
   CVariant(const CVariant &variant);
+  CVariant(CVariant &&rhs);
   ~CVariant();
 
+
+  
   bool isInteger() const;
+  bool isSignedInteger() const;
   bool isUnsignedInteger() const;
   bool isBoolean() const;
   bool isString() const;
@@ -94,10 +101,14 @@ public:
   const CVariant &operator[](unsigned int position) const;
 
   CVariant &operator=(const CVariant &rhs);
+  CVariant &operator=(CVariant &&rhs);
   bool operator==(const CVariant &rhs) const;
+  bool operator!=(const CVariant &rhs) const { return !(*this == rhs); }
 
   void push_back(const CVariant &variant);
+  void push_back(CVariant &&variant);
   void append(const CVariant &variant);
+  void append(CVariant &&variant);
 
   const char *c_str() const;
 
@@ -150,4 +161,7 @@ private:
 
   VariantType m_type;
   VariantUnion m_data;
+
+  static VariantArray EMPTY_ARRAY;
+  static VariantMap EMPTY_MAP;
 };

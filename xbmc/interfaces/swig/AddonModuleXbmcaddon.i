@@ -21,6 +21,13 @@
 %module xbmcaddon
 
 %{
+#if defined(TARGET_WINDOWS)
+#  if !defined(WIN32_LEAN_AND_MEAN)
+#    define WIN32_LEAN_AND_MEAN
+#  endif
+#  include <windows.h>
+#endif
+
 #include "interfaces/legacy/Addon.h"
 
 using namespace XBMCAddon;
@@ -37,6 +44,7 @@ using namespace xbmcaddon;
 %feature("knownbasetypes") XBMCAddon::xbmcaddon "AddonClass"
 
 %include "interfaces/legacy/swighelper.h"
+%include "interfaces/legacy/AddonString.h"
 
 %feature("python:coerceToUnicode") XBMCAddon::xbmcaddon::Addon::getLocalizedString "true"
 %include "interfaces/legacy/Addon.h"

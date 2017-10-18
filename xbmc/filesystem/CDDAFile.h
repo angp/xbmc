@@ -32,17 +32,17 @@ class CFileCDDA : public IFile
 {
 public:
   CFileCDDA(void);
-  virtual ~CFileCDDA(void);
-  virtual bool Open(const CURL& url);
-  virtual bool Exists(const CURL& url);
-  virtual int Stat(const CURL& url, struct __stat64* buffer);
+  ~CFileCDDA(void) override;
+  bool Open(const CURL& url) override;
+  bool Exists(const CURL& url) override;
+  int Stat(const CURL& url, struct __stat64* buffer) override;
 
-  virtual unsigned int Read(void* lpBuf, int64_t uiBufSize);
-  virtual int64_t Seek(int64_t iFilePosition, int iWhence = SEEK_SET);
-  virtual void Close();
-  virtual int64_t GetPosition();
-  virtual int64_t GetLength();
-  virtual int GetChunkSize();
+  ssize_t Read(void* lpBuf, size_t uiBufSize) override;
+  int64_t Seek(int64_t iFilePosition, int iWhence = SEEK_SET) override;
+  void Close() override;
+  int64_t GetPosition() override;
+  int64_t GetLength() override;
+  int GetChunkSize() override;
 
 protected:
   bool IsValidFile(const CURL& url);
@@ -54,7 +54,7 @@ protected:
   lsn_t m_lsnCurrent; // Position inside the track in logical sector number
   lsn_t m_lsnEnd;   // End of m_iTrack in logical sector number
   int m_iSectorCount; // max number of sectors to read at once
-  boost::shared_ptr<MEDIA_DETECT::CLibcdio> m_cdio;
+  std::shared_ptr<MEDIA_DETECT::CLibcdio> m_cdio;
 };
 }
 

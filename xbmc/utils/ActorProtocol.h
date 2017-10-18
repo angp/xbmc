@@ -21,7 +21,6 @@
 #pragma once
 
 #include "threads/Thread.h"
-#include "utils/log.h"
 #include <queue>
 #include "memory.h"
 
@@ -60,6 +59,8 @@ class Protocol
 public:
   Protocol(std::string name, CEvent* inEvent, CEvent *outEvent)
     : portName(name), inDefered(false), outDefered(false) {containerInEvent = inEvent; containerOutEvent = outEvent;};
+  Protocol(std::string name)
+    : Protocol(name, nullptr, nullptr) {}
   virtual ~Protocol();
   Message *GetMessage();
   void ReturnMessage(Message *msg);
@@ -69,6 +70,8 @@ public:
   bool ReceiveOutMessage(Message **msg);
   bool ReceiveInMessage(Message **msg);
   void Purge();
+  void PurgeIn(int signal);
+  void PurgeOut(int signal);
   void DeferIn(bool value) {inDefered = value;};
   void DeferOut(bool value) {outDefered = value;};
   void Lock() {criticalSection.lock();};

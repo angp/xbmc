@@ -26,6 +26,7 @@
 #include "system.h"
 #include "network/Network.h"
 #include "Application.h"
+#include "ServiceBroker.h"
 #include "DNSNameCache.h"
 #include "dialogs/GUIDialogProgress.h"
 #include "dialogs/GUIDialogKaiToast.h"
@@ -38,10 +39,14 @@
 #include "utils/JobManager.h"
 #include "utils/log.h"
 #include "utils/XMLUtils.h"
+#include "utils/URIUtils.h"
+#include "utils/StringUtils.h"
+#include "utils/Variant.h"
+#ifdef TARGET_POSIX
+#include "linux/XTimeUtils.h"
+#endif
 
 #include "WakeOnAccess.h"
-
-using namespace std;
 
 #define DEFAULT_NETWORK_INIT_SEC      (20)   // wait 20 sec for network after startup or resume
 #define DEFAULT_NETWORK_SETTLE_MS     (500)  // require 500ms of consistent network availability before trusting it
@@ -58,9 +63,9 @@ static int GetTotalSeconds(const CDateTimeSpan& ts)
   return ts.GetSeconds() + minutes * 60;
 }
 
-static unsigned long HostToIP(const CStdString& host)
+static unsigned long HostToIP(const std::string& host)
 {
-  CStdString ip;
+  std::string ip;
   CDNSNameCache::Lookup(host, ip);
   return inet_addr(ip.c_str());
 }
@@ -83,16 +88,16 @@ CWakeOnAccess::WakeUpEntry::WakeUpEntry (bool isAwake)
 class CMACDiscoveryJob : public CJob
 {
 public:
-  CMACDiscoveryJob(const CStdString& host) : m_host(host) {}
+  explicit CMACDiscoveryJob(const std::string& host) : m_host(host) {}
 
-  virtual bool DoWork();
+  bool DoWork() override;
 
-  const CStdString& GetMAC() const { return m_macAddres; }
-  const CStdString& GetHost() const { return m_host; }
+  const std::string& GetMAC() const { return m_macAddress; }
+  const std::string& GetHost() const { return m_host; }
 
 private:
-  CStdString m_macAddres;
-  CStdString m_host;
+  std::string m_macAddress;
+  std::string m_host;
 };
 
 bool CMACDiscoveryJob::DoWork()
@@ -105,10 +110,10 @@ bool CMACDiscoveryJob::DoWork()
     return false;
   }
 
-  vector<CNetworkInterface*>& ifaces = g_application.getNetwork().GetInterfaceList();
-  for (vector<CNetworkInterface*>::const_iterator it = ifaces.begin(); it != ifaces.end(); ++it)
+  std::vector<CNetworkInterface*>& ifaces = g_application.getNetwork().GetInterfaceList();
+  for (std::vector<CNetworkInterface*>::const_iterator it = ifaces.begin(); it != ifaces.end(); ++it)
   {
-    if ((*it)->GetHostMacAddress(ipAddress, m_macAddres))
+    if ((*it)->GetHostMacAddress(ipAddress, m_macAddress))
       return true;
   }
 
@@ -120,6 +125,7 @@ bool CMACDiscoveryJob::DoWork()
 class WaitCondition
 {
 public:
+  virtual ~WaitCondition() = default;
   virtual bool SuccessWaiting () const { return false; }
 };
 
@@ -158,25 +164,17 @@ int NestDetect::m_nest = 0;
 class ProgressDialogHelper
 {
 public:
-  ProgressDialogHelper (const CStdString& heading) : m_dialog(0)
+  explicit ProgressDialogHelper (const std::string& heading) : m_dialog(0)
   {
     if (g_application.IsCurrentThread())
-      m_dialog = (CGUIDialogProgress*) g_windowManager.GetWindow(WINDOW_DIALOG_PROGRESS);
+      m_dialog = g_windowManager.GetWindow<CGUIDialogProgress>(WINDOW_DIALOG_PROGRESS);
 
     if (m_dialog)
     {
-      m_dialog->SetHeading (heading); 
-      m_dialog->SetLine(0, "");
-      m_dialog->SetLine(1, "");
-      m_dialog->SetLine(2, "");
-
-      int nest_level = NestDetect::Level();
-      if (nest_level > 1)
-      {
-        CStdString nest;
-        nest.Format("Nesting:%d", nest_level);
-        m_dialog->SetLine(2, nest);
-      }
+      m_dialog->SetHeading(CVariant{heading}); 
+      m_dialog->SetLine(0, CVariant{""});
+      m_dialog->SetLine(1, CVariant{""});
+      m_dialog->SetLine(2, CVariant{""});
     }
   }
   ~ProgressDialogHelper ()
@@ -189,13 +187,13 @@ public:
 
   enum wait_result { TimedOut, Canceled, Success };
 
-  wait_result ShowAndWait (const WaitCondition& waitObj, unsigned timeOutSec, const CStdString& line1)
+  wait_result ShowAndWait (const WaitCondition& waitObj, unsigned timeOutSec, const std::string& line1)
   {
     unsigned timeOutMs = timeOutSec * 1000;
 
     if (m_dialog)
     {
-      m_dialog->SetLine(1, line1);
+      m_dialog->SetLine(0, CVariant{line1});
 
       m_dialog->SetPercentage(1); // avoid flickering by starting at 1% ..
     }
@@ -210,7 +208,7 @@ public:
       if (m_dialog)
       {
         if (!m_dialog->IsActive())
-          m_dialog->StartModal();
+          m_dialog->Open();
 
         if (m_dialog->IsCanceled())
           return Canceled;
@@ -220,7 +218,7 @@ public:
         unsigned ms_passed = timeOutMs - end_time.MillisLeft();
 
         int percentage = (ms_passed * 100) / timeOutMs;
-        m_dialog->SetPercentage(max(percentage, 1)); // avoid flickering , keep minimum 1%
+        m_dialog->SetPercentage(std::max(percentage, 1)); // avoid flickering , keep minimum 1%
       }
 
       Sleep (m_dialog ? 20 : 200);
@@ -236,10 +234,10 @@ private:
 class NetworkStartWaiter : public WaitCondition
 {
 public:
-  NetworkStartWaiter (unsigned settle_time_ms, const CStdString& host) : m_settle_time_ms (settle_time_ms), m_host(host)
+  NetworkStartWaiter (unsigned settle_time_ms, const std::string& host) : m_settle_time_ms (settle_time_ms), m_host(host)
   {
   }
-  virtual bool SuccessWaiting () const
+  bool SuccessWaiting () const override
   {
     unsigned long address = ntohl(HostToIP(m_host));
     bool online = g_application.getNetwork().HasInterfaceForIP(address);
@@ -252,7 +250,7 @@ public:
 private:
   mutable XbmcThreads::EndTime m_end;
   unsigned m_settle_time_ms;
-  const CStdString m_host;
+  const std::string m_host;
 };
 
 class PingResponseWaiter : public WaitCondition, private IJobCallback
@@ -267,16 +265,16 @@ public:
       m_jobId = CJobManager::GetInstance().AddJob(job, this);
     }
   }
-  ~PingResponseWaiter()
+  ~PingResponseWaiter() override
   {
     CJobManager::GetInstance().CancelJob(m_jobId);
   }
-  virtual bool SuccessWaiting () const
+  bool SuccessWaiting () const override
   {
     return m_jobId ? m_hostOnline : Ping(m_server);
   }
 
-  virtual void OnJobComplete(unsigned int jobID, bool success, CJob *job)
+  void OnJobComplete(unsigned int jobID, bool success, CJob *job) override
   {
     m_hostOnline = success;
   }
@@ -292,9 +290,9 @@ private:
   class CHostProberJob : public CJob
   {
     public:
-      CHostProberJob(const CWakeOnAccess::WakeUpEntry& server) : m_server (server) {}
+      explicit CHostProberJob(const CWakeOnAccess::WakeUpEntry& server) : m_server (server) {}
 
-      virtual bool DoWork()
+      bool DoWork() override
       {
         while (!ShouldCancel(0,0))
         {
@@ -322,24 +320,25 @@ CWakeOnAccess::CWakeOnAccess()
 {
 }
 
-CWakeOnAccess &CWakeOnAccess::Get()
+CWakeOnAccess &CWakeOnAccess::GetInstance()
 {
   static CWakeOnAccess sWakeOnAccess;
   return sWakeOnAccess;
 }
 
-void CWakeOnAccess::WakeUpHost(const CURL& url)
+bool CWakeOnAccess::WakeUpHost(const CURL& url)
 {
-  CStdString hostName = url.GetHostName();
+  std::string hostName = url.GetHostName();
 
-  if (!hostName.IsEmpty())
-    WakeUpHost (hostName, url.Get());
+  if (!hostName.empty())
+    return WakeUpHost (hostName, url.Get());
+  return true;
 }
 
-void CWakeOnAccess::WakeUpHost (const CStdString& hostName, const string& customMessage)
+bool CWakeOnAccess::WakeUpHost (const std::string& hostName, const std::string& customMessage)
 {
   if (!IsEnabled())
-    return; // bail if feature is turned off
+    return true; // bail if feature is turned off
 
   WakeUpEntry server;
 
@@ -352,18 +351,23 @@ void CWakeOnAccess::WakeUpHost (const CStdString& hostName, const string& custom
     if (nesting.IsNested()) // we might get in trouble if it gets called back in loop
       CLog::Log(LOGWARNING,"WakeOnAccess recursively called on gui-thread [%d]", NestDetect::Level());
 
-    WakeUpHost(server);
+    bool ret = WakeUpHost(server);
+
+    if (!ret) // extra log if we fail for some reason
+      CLog::Log(LOGWARNING,"WakeOnAccess failed to bring up [%s] - there may be trouble ahead !", hostName.c_str());
 
     TouchHostEntry(hostName);
+
+    return ret;
   }
+  return true;
 }
 
 #define LOCALIZED(id) g_localizeStrings.Get(id)
 
-void CWakeOnAccess::WakeUpHost(const WakeUpEntry& server)
+bool CWakeOnAccess::WakeUpHost(const WakeUpEntry& server)
 {
-  CStdString heading = LOCALIZED(13027);
-  heading.Format (heading, server.host);
+  std::string heading = StringUtils::Format(LOCALIZED(13027).c_str(), server.host.c_str());
 
   ProgressDialogHelper dlg (heading);
 
@@ -372,8 +376,16 @@ void CWakeOnAccess::WakeUpHost(const WakeUpEntry& server)
 
     if (dlg.ShowAndWait (waitObj, m_netinit_sec, LOCALIZED(13028)) != ProgressDialogHelper::Success)
     {
-      CLog::Log(LOGNOTICE,"WakeOnAccess timeout/cancel while waiting for network");
-      return; // timedout or canceled
+      if (g_application.getNetwork().IsConnected() && HostToIP(server.host) == INADDR_NONE)
+      {
+        // network connected (at least one interface) but dns-lookup failed (host by name, not ip-address), so dont abort yet
+        CLog::Log(LOGWARNING, "WakeOnAccess timeout/cancel while waiting for network (proceeding anyway)");
+      }
+      else
+      {
+        CLog::Log(LOGNOTICE, "WakeOnAccess timeout/cancel while waiting for network");
+        return false; // timedout or canceled ; give up 
+      }
     }
   }
 
@@ -383,7 +395,7 @@ void CWakeOnAccess::WakeUpHost(const WakeUpEntry& server)
     if (g_application.getNetwork().PingHost(dst_ip, server.ping_port, 500)) // quick ping with short timeout to not block too long
     {
       CLog::Log(LOGNOTICE,"WakeOnAccess success exit, server already running");
-      return;
+      return true;
     }
   }
 
@@ -393,7 +405,7 @@ void CWakeOnAccess::WakeUpHost(const WakeUpEntry& server)
 
     if (g_application.IsCurrentThread() || !g_application.m_pPlayer->IsPlaying())
       CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Error, heading, LOCALIZED(13029));
-    return;
+    return false;
   }
 
   {
@@ -408,20 +420,23 @@ void CWakeOnAccess::WakeUpHost(const WakeUpEntry& server)
     if (result != ProgressDialogHelper::Success)
     {
       CLog::Log(LOGNOTICE,"WakeOnAccess timeout/cancel while waiting for response");
-      return; // timedout or canceled
+      return false; // timedout or canceled
     }
   }
 
+  // we have ping response ; just add extra wait-for-services before returning if requested
+
   {
-    WaitCondition waitObj ; // wait uninteruptable fixed time for services ..
+    WaitCondition waitObj ; // wait uninterruptable fixed time for services ..
 
     dlg.ShowAndWait (waitObj, server.wait_services_sec, LOCALIZED(13032));
 
     CLog::Log(LOGNOTICE,"WakeOnAccess sequence completed, server started");
   }
+  return true;
 }
 
-bool CWakeOnAccess::FindOrTouchHostEntry (const CStdString& hostName, WakeUpEntry& result)
+bool CWakeOnAccess::FindOrTouchHostEntry (const std::string& hostName, WakeUpEntry& result)
 {
   CSingleLock lock (m_entrylist_protect);
 
@@ -431,11 +446,11 @@ bool CWakeOnAccess::FindOrTouchHostEntry (const CStdString& hostName, WakeUpEntr
   {
     WakeUpEntry& server = *i;
 
-    if (hostName.Equals(server.host.c_str()))
+    if (StringUtils::EqualsNoCase(hostName, server.host))
     {
       CDateTime now = CDateTime::GetCurrentDateTime();
 
-      if (now > server.nextWake)
+      if (now >= server.nextWake)
       {
         result = server;
         need_wakeup = true;
@@ -452,7 +467,7 @@ bool CWakeOnAccess::FindOrTouchHostEntry (const CStdString& hostName, WakeUpEntr
   return need_wakeup;
 }
 
-void CWakeOnAccess::TouchHostEntry (const CStdString& hostName)
+void CWakeOnAccess::TouchHostEntry (const std::string& hostName)
 {
   CSingleLock lock (m_entrylist_protect);
 
@@ -460,7 +475,7 @@ void CWakeOnAccess::TouchHostEntry (const CStdString& hostName)
   {
     WakeUpEntry& server = *i;
 
-    if (hostName.Equals(server.host.c_str()))
+    if (StringUtils::EqualsNoCase(hostName, server.host))
     {
       server.nextWake = CDateTime::GetCurrentDateTime() + server.timeout;
       return;
@@ -468,45 +483,50 @@ void CWakeOnAccess::TouchHostEntry (const CStdString& hostName)
   }
 }
 
-static void AddHost (const CStdString& host, vector<string>& hosts)
+static void AddHost (const std::string& host, std::vector<std::string>& hosts)
 {
-  for (vector<string>::const_iterator it = hosts.begin(); it != hosts.end(); ++it)
-    if (host.Equals((*it).c_str()))
+  for (std::vector<std::string>::const_iterator it = hosts.begin(); it != hosts.end(); ++it)
+    if (StringUtils::EqualsNoCase(host, *it))
       return; // allready there ..
 
-  if (!host.IsEmpty())
+  if (!host.empty())
     hosts.push_back(host);
 }
 
-static void AddHostFromDatabase(const DatabaseSettings& setting, vector<string>& hosts)
+static void AddHostFromDatabase(const DatabaseSettings& setting, std::vector<std::string>& hosts)
 {
-  if (setting.type.Equals("mysql"))
+  if (StringUtils::EqualsNoCase(setting.type, "mysql"))
     AddHost(setting.host, hosts);
 }
 
-void CWakeOnAccess::QueueMACDiscoveryForHost(const CStdString& host)
+void CWakeOnAccess::QueueMACDiscoveryForHost(const std::string& host)
 {
   if (IsEnabled())
-    CJobManager::GetInstance().AddJob(new CMACDiscoveryJob(host), this);
+  {
+    if (URIUtils::IsHostOnLAN(host, true))
+      CJobManager::GetInstance().AddJob(new CMACDiscoveryJob(host), this);
+    else
+      CLog::Log(LOGNOTICE, "%s - skip Mac discovery for non-local host '%s'", __FUNCTION__, host.c_str());
+  }
 }
 
 static void AddHostsFromMediaSource(const CMediaSource& source, std::vector<std::string>& hosts)
 {
-  for (CStdStringArray::const_iterator it = source.vecPaths.begin() ; it != source.vecPaths.end(); it++)
+  for (std::vector<std::string>::const_iterator it = source.vecPaths.begin() ; it != source.vecPaths.end(); ++it)
   {
-    CURL url = *it;
+    CURL url(*it);
 
     AddHost (url.GetHostName(), hosts);
   }
 }
 
-static void AddHostsFromVecSource(const VECSOURCES& sources, vector<string>& hosts)
+static void AddHostsFromVecSource(const VECSOURCES& sources, std::vector<std::string>& hosts)
 {
-  for (VECSOURCES::const_iterator it = sources.begin(); it != sources.end(); it++)
+  for (VECSOURCES::const_iterator it = sources.begin(); it != sources.end(); ++it)
     AddHostsFromMediaSource(*it, hosts);
 }
 
-static void AddHostsFromVecSource(const VECSOURCES* sources, vector<string>& hosts)
+static void AddHostsFromVecSource(const VECSOURCES* sources, std::vector<std::string>& hosts)
 {
   if (sources)
     AddHostsFromVecSource(*sources, hosts);
@@ -514,10 +534,10 @@ static void AddHostsFromVecSource(const VECSOURCES* sources, vector<string>& hos
 
 void CWakeOnAccess::QueueMACDiscoveryForAllRemotes()
 {
-  vector<string> hosts;
+  std::vector<std::string> hosts;
 
   // add media sources
-  CMediaSourceSettings& ms = CMediaSourceSettings::Get();
+  CMediaSourceSettings& ms = CMediaSourceSettings::GetInstance();
 
   AddHostsFromVecSource(ms.GetSources("video"), hosts);
   AddHostsFromVecSource(ms.GetSources("music"), hosts);
@@ -534,32 +554,31 @@ void CWakeOnAccess::QueueMACDiscoveryForAllRemotes()
   // add from path substitutions ..
   for (CAdvancedSettings::StringMapping::iterator i = g_advancedSettings.m_pathSubstitutions.begin(); i != g_advancedSettings.m_pathSubstitutions.end(); ++i)
   {
-    CURL url = i->second;
+    CURL url(i->second);
 
     AddHost (url.GetHostName(), hosts);
   }
 
-  for (vector<string>::const_iterator it = hosts.begin(); it != hosts.end(); it++)
+  for (std::vector<std::string>::const_iterator it = hosts.begin(); it != hosts.end(); ++it)
     QueueMACDiscoveryForHost(*it);
 }
 
-void CWakeOnAccess::SaveMACDiscoveryResult(const CStdString& host, const CStdString& mac)
+void CWakeOnAccess::SaveMACDiscoveryResult(const std::string& host, const std::string& mac)
 {
   CLog::Log(LOGNOTICE, "%s - Mac discovered for host '%s' -> '%s'", __FUNCTION__, host.c_str(), mac.c_str());
 
-  CStdString heading = LOCALIZED(13033);
+  std::string heading = LOCALIZED(13033);
 
   for (EntriesVector::iterator i = m_entries.begin(); i != m_entries.end(); ++i)
   {
-    if (host.Equals(i->host.c_str()))
+    if (StringUtils::EqualsNoCase(host, i->host))
     {
       CLog::Log(LOGDEBUG, "%s - Update existing entry for host '%s'", __FUNCTION__, host.c_str());
-      if (!mac.Equals(i->mac.c_str()))
+      if (!StringUtils::EqualsNoCase(mac, i->mac))
       {
         if (IsEnabled()) // show notification only if we have general feature enabled
         {
-          CStdString message = LOCALIZED(13034);
-          message.Format(message, host);
+          std::string message = StringUtils::Format(LOCALIZED(13034).c_str(), host.c_str());
           CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Info, heading, message, 4000, true, 3000);
         }
 
@@ -580,8 +599,7 @@ void CWakeOnAccess::SaveMACDiscoveryResult(const CStdString& host, const CStdStr
   CLog::Log(LOGDEBUG, "%s - Create new entry for host '%s'", __FUNCTION__, host.c_str());
   if (IsEnabled()) // show notification only if we have general feature enabled
   {
-    CStdString message = LOCALIZED(13035);
-    message.Format(message, host);
+    std::string message = StringUtils::Format(LOCALIZED(13035).c_str(), host.c_str());
     CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Info, heading, message, 4000, true, 3000);
   }
 
@@ -590,10 +608,10 @@ void CWakeOnAccess::SaveMACDiscoveryResult(const CStdString& host, const CStdStr
 
 void CWakeOnAccess::OnJobComplete(unsigned int jobID, bool success, CJob *job)
 {
-  CMACDiscoveryJob* discoverJob = (CMACDiscoveryJob*)job;
+  CMACDiscoveryJob* discoverJob = static_cast<CMACDiscoveryJob*>(job);
 
-  const CStdString& host = discoverJob->GetHost();
-  const CStdString& mac = discoverJob->GetMAC();
+  const std::string& host = discoverJob->GetHost();
+  const std::string& mac = discoverJob->GetMAC();
 
   if (success)
   {
@@ -607,17 +625,33 @@ void CWakeOnAccess::OnJobComplete(unsigned int jobID, bool success, CJob *job)
 
     if (IsEnabled())
     {
-      CStdString heading = LOCALIZED(13033);
-      CStdString message = LOCALIZED(13036);
-      message.Format(message, host);
+      std::string heading = LOCALIZED(13033);
+      std::string message = StringUtils::Format(LOCALIZED(13036).c_str(), host.c_str());
       CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Error, heading, message, 4000, true, 3000);
     }
   }
 }
 
-CStdString CWakeOnAccess::GetSettingFile()
+void CWakeOnAccess::OnSettingChanged(std::shared_ptr<const CSetting> setting)
 {
-  return CSpecialProtocol::TranslatePath("special://masterprofile/wakeonlan.xml");
+  if (setting == nullptr)
+    return;
+
+  const std::string& settingId = setting->GetId();
+  if (settingId == CSettings::SETTING_POWERMANAGEMENT_WAKEONACCESS)
+  {
+    bool enabled = std::static_pointer_cast<const CSettingBool>(setting)->GetValue();
+
+    SetEnabled(enabled);
+
+    if (enabled)
+      QueueMACDiscoveryForAllRemotes();
+  }
+}
+
+std::string CWakeOnAccess::GetSettingFile()
+{
+  return CSpecialProtocol::TranslatePath("special://profile/wakeonlan.xml");
 }
 
 void CWakeOnAccess::OnSettingsLoaded()
@@ -627,30 +661,22 @@ void CWakeOnAccess::OnSettingsLoaded()
   LoadFromXML();
 }
 
-void CWakeOnAccess::OnSettingsSaved() const
+void CWakeOnAccess::SetEnabled(bool enabled) 
 {
-  bool enabled = CSettings::Get().GetBool("powermanagement.wakeonaccess");
+  m_enabled = enabled;
 
-  if (enabled != IsEnabled())
-  {
-    CWakeOnAccess& woa = CWakeOnAccess::Get();
-
-    woa.SetEnabled(enabled);
-
-    if (enabled)
-      woa.QueueMACDiscoveryForAllRemotes();
-  }
+  CLog::Log(LOGNOTICE,"WakeOnAccess - Enabled:%s", m_enabled ? "TRUE" : "FALSE");
 }
 
 void CWakeOnAccess::LoadFromXML()
 {
-  bool enabled = CSettings::Get().GetBool("powermanagement.wakeonaccess");
-  SetEnabled(enabled);
+  bool enabled = CServiceBroker::GetSettings().GetBool(CSettings::SETTING_POWERMANAGEMENT_WAKEONACCESS);
 
   CXBMCTinyXML xmlDoc;
   if (!xmlDoc.LoadFile(GetSettingFile()))
   {
-    CLog::Log(LOGNOTICE, "%s - unable to load:%s", __FUNCTION__, GetSettingFile().c_str());
+    if (enabled)
+      CLog::Log(LOGNOTICE, "%s - unable to load:%s", __FUNCTION__, GetSettingFile().c_str());
     return;
   }
 
@@ -664,6 +690,8 @@ void CWakeOnAccess::LoadFromXML()
   m_entries.clear();
 
   CLog::Log(LOGNOTICE,"WakeOnAccess - Load settings :");
+
+  SetEnabled(enabled);
 
   int tmp;
   if (XMLUtils::GetInt(pRootElement, "netinittimeout", tmp, 0, 5 * 60))
@@ -679,7 +707,7 @@ void CWakeOnAccess::LoadFromXML()
   {
     WakeUpEntry entry;
 
-    CStdString strtmp;
+    std::string strtmp;
     if (XMLUtils::GetString(pWakeUp, "host", strtmp))
       entry.host = strtmp;
 

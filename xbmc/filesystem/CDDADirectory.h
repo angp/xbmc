@@ -30,7 +30,7 @@ class CCDDADirectory :
 {
 public:
   CCDDADirectory(void);
-  virtual ~CCDDADirectory(void);
-  virtual bool GetDirectory(const CStdString& strPath, CFileItemList &items);
+  ~CCDDADirectory(void) override;
+  bool GetDirectory(const CURL& url, CFileItemList &items) override;
 };
 }

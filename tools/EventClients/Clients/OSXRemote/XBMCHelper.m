@@ -25,10 +25,10 @@
     {
       [remote setDelegate:self];
       [remote setSimulateHoldEvents:NO];
-      //for now, we're using lending of exlusive lock
+      //for now, we're using lending of exclusive lock
       //kHIDRemoteModeExclusiveAuto isn't working, as we're a background daemon
       //one possibility would be to know when XBMC is running. Once we know that,
-      //we could aquire exclusive lock when it's running, and release _exclusive_
+      //we could acquire exclusive lock when it's running, and release _exclusive_
       //access once done
       [remote setExclusiveLockLendingEnabled:YES];
 
@@ -268,7 +268,7 @@
   NSFileManager *fileManager = [NSFileManager defaultManager];
   if([fileManager fileExistsAtPath:mp_app_path]){
     if(mp_home_path && [mp_home_path length])
-      setenv("XBMC_HOME", [mp_home_path UTF8String], 1);
+      setenv("KODI_HOME", [mp_home_path UTF8String], 1);
     //launch or activate xbmc
     if(![[NSWorkspace sharedWorkspace] launchApplication:mp_app_path])
       ELOG(@"Error launching %@", mp_app_path);

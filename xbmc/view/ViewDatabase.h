@@ -19,23 +19,25 @@
  *
  */
 #include "dbwrappers/Database.h"
+#include <string>
 
 class CViewState;
 
 class CViewDatabase : public CDatabase
 {
 public:
-  CViewDatabase(void);
-  virtual ~CViewDatabase(void);
-  virtual bool Open();
+  CViewDatabase();
+  ~CViewDatabase() override;
+  bool Open() override;
 
-  bool GetViewState(const CStdString &path, int windowID, CViewState &state, const CStdString &skin);
-  bool SetViewState(const CStdString &path, int windowID, const CViewState &state, const CStdString &skin);
+  bool GetViewState(const std::string &path, int windowID, CViewState &state, const std::string &skin);
+  bool SetViewState(const std::string &path, int windowID, const CViewState &state, const std::string &skin);
   bool ClearViewStates(int windowID);
 
 protected:
-  virtual bool CreateTables();
-  virtual bool UpdateOldVersion(int version);
-  virtual int GetMinVersion() const { return 6; };
-  const char *GetBaseDBName() const { return "ViewModes"; };
+  void CreateTables() override;
+  void CreateAnalytics() override;
+  void UpdateTables(int version) override;
+  int GetSchemaVersion() const override { return 6; }
+  const char *GetBaseDBName() const override { return "ViewModes"; }
 };

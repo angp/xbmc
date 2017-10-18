@@ -21,6 +21,13 @@
 %module xbmcvfs
 
 %{
+#if defined(TARGET_WINDOWS)
+#  if !defined(WIN32_LEAN_AND_MEAN)
+#    define WIN32_LEAN_AND_MEAN
+#  endif
+#  include <windows.h>
+#endif
+
 #include "interfaces/legacy/ModuleXbmcvfs.h"
 #include "interfaces/legacy/File.h"
 #include "interfaces/legacy/Stat.h"
@@ -35,6 +42,8 @@ using namespace xbmcvfs;
 
 %}
 
+%include "interfaces/legacy/swighelper.h"
+%include "interfaces/legacy/AddonString.h"
 %include "interfaces/legacy/File.h"
 
 %rename ("st_atime") XBMCAddon::xbmcvfs::Stat::atime;

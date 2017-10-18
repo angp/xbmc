@@ -20,15 +20,15 @@
 #pragma once
 #include <string>
 
-#include "settings/ISettingsHandler.h"
+#include "settings/lib/ISettingsHandler.h"
 #include "threads/CriticalSection.h"
 
 class CUPnPSettings : public ISettingsHandler
 {
 public:
-  static CUPnPSettings& Get();
+  static CUPnPSettings& GetInstance();
   
-  virtual void OnSettingsUnloaded();
+  void OnSettingsUnloaded() override;
 
   bool Load(const std::string &file);
   bool Save(const std::string &file) const;
@@ -48,9 +48,9 @@ public:
 
 protected:
   CUPnPSettings();
-  CUPnPSettings(const CUPnPSettings&);
-  CUPnPSettings const& operator=(CUPnPSettings const&);
-  virtual ~CUPnPSettings();
+  CUPnPSettings(const CUPnPSettings&) = delete;
+  CUPnPSettings& operator=(CUPnPSettings const&) = delete;
+  ~CUPnPSettings() override;
 
 private:
   std::string m_serverUUID;

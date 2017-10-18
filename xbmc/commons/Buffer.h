@@ -20,7 +20,7 @@
  */
 #include <string.h>
 #include <string>
-#include <boost/shared_array.hpp>
+#include <memory>
 
 namespace XbmcCommons
 {
@@ -29,7 +29,7 @@ namespace XbmcCommons
     std::string message;
 
   public:
-    BufferException(const char* message_) : message(message_) {}
+    explicit BufferException(const char* message_) : message(message_) {}
   };
 
   /**
@@ -88,13 +88,13 @@ namespace XbmcCommons
    */
   class Buffer
   {
-    boost::shared_array<unsigned char> bufferRef;
+    std::shared_ptr<unsigned char> bufferRef;
     unsigned char* buffer;
     size_t mposition;
     size_t mcapacity;
     size_t mlimit;
 
-    inline void check(int count) const throw(BufferException)
+    inline void check(int count) const
     { 
       if ((mposition + count) > mlimit) 
         throw BufferException("Buffer buffer overflow: Cannot add more data to the Buffer's buffer.");
@@ -109,7 +109,7 @@ namespace XbmcCommons
     /**
      * Construct a buffer given an externally managed memory buffer.
      * The ownership of the buffer is assumed to be the code that called
-     * this constructor, therefore the Buffer descrutor will not free it.
+     * this constructor, therefore the Buffer destructor will not free it.
      *
      * The newly constructed buffer is considered empty and is ready to
      * have data written into it.
@@ -125,14 +125,14 @@ namespace XbmcCommons
 
     /**
      * Construct a buffer buffer using the size buffer provided. The
-     * buffer will be internally managed and potentiall shared with 
+     * buffer will be internally managed and potentially shared with 
      * other Buffer instances. It will be freed upon destruction of
      * the last Buffer that references it.
      */
-    inline Buffer(size_t bufferSize) : buffer(bufferSize ? new unsigned char[bufferSize] : NULL), mcapacity(bufferSize)
+    inline explicit Buffer(size_t bufferSize) : buffer(bufferSize ? new unsigned char[bufferSize] : NULL), mcapacity(bufferSize)
     { 
       clear(); 
-      bufferRef.reset(buffer);
+      bufferRef.reset(buffer, std::default_delete<unsigned char[]>());
     }
 
     /**
@@ -140,7 +140,7 @@ namespace XbmcCommons
      * shares the underlying data buffer with the Buffer it is a copy
      * of. Changes made to the data through this buffer will be seen
      * in the source buffer and vice/vrs. However, each buffer maintains
-     * it's own indexing.
+     * its own indexing.
      */
     inline Buffer(const Buffer& buf) : bufferRef(buf.bufferRef), buffer(buf.buffer), 
       mposition(buf.mposition), mcapacity(buf.mcapacity), mlimit(buf.mlimit) { }
@@ -152,7 +152,7 @@ namespace XbmcCommons
      * shares the underlying data buffer with the Buffer it is a copy
      * of. Changes made to the data through this buffer will be seen
      * in the source buffer and vice/vrs. However, each buffer maintains
-     * it's own indexing.
+     * its own indexing.
      */
     inline Buffer& operator=(const Buffer& buf)
     {
@@ -166,7 +166,7 @@ namespace XbmcCommons
     inline Buffer& allocate(size_t bufferSize)
     {
       buffer = bufferSize ? new unsigned char[bufferSize] : NULL;
-      bufferRef.reset(buffer);
+      bufferRef.reset(buffer, std::default_delete<unsigned char[]>());
       mcapacity = bufferSize;
       clear();
       return *this;
@@ -219,15 +219,15 @@ namespace XbmcCommons
      */
     inline size_t remaining() { return mlimit - mposition; }
 
-    inline Buffer& put(const void* src, size_t bytes) throw(BufferException)
+    inline Buffer& put(const void* src, size_t bytes)
     { check(bytes); memcpy( buffer + mposition, src, bytes); mposition += bytes; return *this; }
-    inline Buffer& get(void* dest, size_t bytes) throw(BufferException) 
+    inline Buffer& get(void* dest, size_t bytes)
     { check(bytes); memcpy( dest, buffer + mposition, bytes); mposition += bytes; return *this; }
 
     inline unsigned char* array() { return buffer; }
     inline unsigned char* curPosition() { return buffer + mposition; }
     inline Buffer& setPosition(size_t position) { mposition = position; return *this; }
-    inline Buffer& forward(size_t positionIncrement) throw(BufferException)
+    inline Buffer& forward(size_t positionIncrement)
     { check(positionIncrement); mposition += positionIncrement; return *this; }
 
     inline size_t limit() const { return mlimit; }
@@ -235,8 +235,8 @@ namespace XbmcCommons
     inline size_t position() const { return mposition; }
 
 #define DEFAULTBUFFERRELATIVERW(name,type) \
-    inline Buffer& put##name(const type & val) throw(BufferException) { return put(&val, sizeof(type)); } \
-    inline type get##name() throw(BufferException) { type ret; get(&ret, sizeof(type)); return ret; }
+    inline Buffer& put##name(const type & val) { return put(&val, sizeof(type)); } \
+    inline type get##name() { type ret; get(&ret, sizeof(type)); return ret; }
 
     DEFAULTBUFFERRELATIVERW(Bool,bool);
     DEFAULTBUFFERRELATIVERW(Int,int);
@@ -248,18 +248,18 @@ namespace XbmcCommons
     DEFAULTBUFFERRELATIVERW(LongLong,long long);
 #undef DEFAULTBUFFERRELATIVERW
 
-    inline Buffer& putString(const char* str) throw (BufferException) { size_t len = strlen(str) + 1; check(len); put(str, len); return (*this); }
-    inline Buffer& putString(const std::string& str) throw (BufferException) { size_t len = str.length() + 1; check(len); put(str.c_str(), len); return (*this); }
+    inline Buffer& putString(const char* str) { size_t len = strlen(str) + 1; check(len); put(str, len); return (*this); }
+    inline Buffer& putString(const std::string& str) { size_t len = str.length() + 1; check(len); put(str.c_str(), len); return (*this); }
 
-    inline std::string getString() throw (BufferException) { std::string ret((const char*)(buffer + mposition)); size_t len = ret.length() + 1; check(len); mposition += len; return ret; }
-    inline std::string getString(size_t length) throw (BufferException) 
+    inline std::string getString() { std::string ret((const char*)(buffer + mposition)); size_t len = ret.length() + 1; check(len); mposition += len; return ret; }
+    inline std::string getString(size_t length)
     { 
       check(length); 
       std::string ret((const char*)(buffer + mposition),length);
       mposition += length;
       return ret;
     }
-    inline char* getCharPointerDirect() throw (BufferException) { char* ret = (char*)(buffer + mposition); size_t len = strlen(ret) + 1; check(len); mposition += len; return ret; }
+    inline char* getCharPointerDirect() { char* ret = (char*)(buffer + mposition); size_t len = strlen(ret) + 1; check(len); mposition += len; return ret; }
 
   };
 

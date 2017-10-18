@@ -22,9 +22,10 @@
 #include "GUIInfoManager.h"
 #include "guilib/GUIWindowManager.h"
 #include "FileItem.h"
-#include "guilib/Key.h"
+#include "input/Key.h"
 #include "guilib/LocalizeStrings.h"
 #include "PictureInfoTag.h"
+#include "guiinfo/GUIInfoLabels.h"
 
 #define CONTROL_PICTURE_INFO 5
 
@@ -99,8 +100,8 @@ void CGUIDialogPictureInfo::UpdatePictureInfo()
     if (info == SLIDE_EXIF_DATE || info == SLIDE_EXIF_LONG_DATE || info == SLIDE_EXIF_LONG_DATE_TIME )
       continue;
 
-    CStdString picInfo = g_infoManager.GetLabel(info);
-    if (!picInfo.IsEmpty())
+    std::string picInfo = g_infoManager.GetLabel(info);
+    if (!picInfo.empty())
     {
       CFileItemPtr item(new CFileItem(g_localizeStrings.Get(SLIDE_STRING_BASE + info)));
       item->SetLabel2(picInfo);
@@ -117,5 +118,5 @@ void CGUIDialogPictureInfo::OnDeinitWindow(int nextWindowID)
   CGUIMessage msgReset(GUI_MSG_LABEL_RESET, GetID(), CONTROL_PICTURE_INFO);
   OnMessage(msgReset);
   m_pictureInfo->Clear();
-  m_currentPicture.Empty();
+  m_currentPicture.clear();
 }

@@ -25,8 +25,8 @@
 
 #include "threads/CriticalSection.h"
 
-#include "settings/ISettingCallback.h"
-#include "settings/ISettingsHandler.h"
+#include "settings/lib/ISettingCallback.h"
+#include "settings/lib/ISettingsHandler.h"
 
 class CRssReader;
 class IRssObserver;
@@ -42,12 +42,12 @@ typedef std::map<int, RssSet> RssUrls;
 class CRssManager : public ISettingCallback, public ISettingsHandler
 {
 public:
-  static CRssManager& Get();
+  static CRssManager& GetInstance();
 
-  virtual void OnSettingsLoaded();
-  virtual void OnSettingsUnloaded();
+  void OnSettingsLoaded() override;
+  void OnSettingsUnloaded() override;
 
-  virtual void OnSettingAction(const CSetting *setting);
+  void OnSettingAction(std::shared_ptr<const CSetting> setting) override;
 
   void Start();
   void Stop();
@@ -61,11 +61,11 @@ public:
 
 protected:
   CRssManager();
-  CRssManager(const CRssManager&);
-  CRssManager const& operator=(CRssManager const&);
-  ~CRssManager();
+  ~CRssManager() override;
 
 private:
+  CRssManager(const CRssManager&) = delete;
+  CRssManager& operator=(const CRssManager&) = delete;
   struct READERCONTROL
   {
     int controlID;

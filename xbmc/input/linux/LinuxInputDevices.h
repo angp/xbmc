@@ -22,9 +22,12 @@
 
 #include <vector>
 #include <string>
+#include <deque>
 #include "windowing/XBMC_events.h"
 #include "input/XBMC_keyboard.h"
 #include "threads/SingleLock.h"
+#include "input/touch/generic/GenericTouchInputHandler.h"
+#include "threads/Thread.h"
 
 struct KeymapEntry
 {
@@ -38,10 +41,10 @@ struct KeymapEntry
 class CLinuxInputDevice
 {
 public:
-  CLinuxInputDevice(const std::string fileName, int index);
+  CLinuxInputDevice(const std::string& fileName, int index);
   ~CLinuxInputDevice();
   XBMC_Event ReadEvent();
-  char* GetDeviceName();
+  const std::string& GetFileName();
   bool IsUnplugged();
  
 private:
@@ -59,6 +62,8 @@ private:
   XBMCMod UpdateModifiers(XBMC_Event& devt);
   bool GetKeymapEntry(KeymapEntry& entry);
   int KeyboardGetSymbol(unsigned short value);
+  bool mtAbsEvent(const struct input_event& levt);
+  bool mtSynEvent(const struct input_event& levt);
 
   int m_fd;
   int m_vt_fd;
@@ -79,6 +84,11 @@ private:
   int m_deviceMaxAxis;
   bool m_bSkipNonKeyEvents;
   bool m_bUnplugged;
+  std::deque<XBMC_Event> m_equeue;
+  int m_mt_currentSlot;
+  int m_mt_x[CGenericTouchInputHandler::MAX_POINTERS];
+  int m_mt_y[CGenericTouchInputHandler::MAX_POINTERS];
+  TouchInput m_mt_event[CGenericTouchInputHandler::MAX_POINTERS];
 };
 
 class CLinuxInputDevices
@@ -89,12 +99,25 @@ public:
   XBMC_Event ReadEvent();
   bool IsRemoteLowBattery();
   bool IsRemoteNotPaired();
+  size_t Size() { return m_devices.size(); }
 private:
   CCriticalSection m_devicesListLock;
+  bool IsUdevJoystick(const char *devpath);
   bool CheckDevice(const char *device);
   std::vector<CLinuxInputDevice*> m_devices;
   bool m_bReInitialize;
-  time_t m_lastHotplugCheck;
+};
+
+class CLinuxInputDevicesCheckHotplugged : protected CThread
+{
+public:
+  CLinuxInputDevicesCheckHotplugged(CLinuxInputDevices &parent);
+  ~CLinuxInputDevicesCheckHotplugged();
+private:
+  CLinuxInputDevices &m_parent;
+  CEvent m_quitEvent;
+protected:
+  virtual void Process();
 };
 
 #endif /* LINUXINPUTDEVICES_H_ */

@@ -23,26 +23,41 @@
 
 #include "system.h"
 
-#if   defined(TARGET_WINDOWS) && defined(HAS_GL)
-#include "windows/WinSystemWin32GL.h"
-
-#elif defined(TARGET_WINDOWS) && defined(HAS_DX)
+#if defined(TARGET_WINDOWS)
 #include "windows/WinSystemWin32DX.h"
 
-#elif defined(TARGET_LINUX)   && defined(HAS_GL)   && defined(HAVE_X11)
-#include "X11/WinSystemX11GL.h"
+#elif defined(TARGET_RASPBERRY_PI) && defined(HAS_GLES)
+#include "rpi/WinSystemRpiGLESContext.h"
 
-#elif defined(TARGET_LINUX)   && defined(HAS_GLES) && defined(HAVE_X11)
-#include "X11/WinSystemX11GLES.h"
+#elif defined(TARGET_LINUX) && defined(HAS_LIBAMCODEC) && defined(HAS_GLES)
+#include "amlogic/WinSystemAmlogicGLESContext.h"
 
-#elif defined(TARGET_LINUX)   && defined(HAS_GLES) && defined(HAS_EGL)
+#elif defined(TARGET_ANDROID) && defined(HAS_GLES)
+#include "android/WinSystemAndroidGLESContext.h"
+
+#elif defined(HAVE_WAYLAND) && defined(HAS_GL)
+#include "wayland/WinSystemWaylandEGLContextGL.h"
+
+#elif defined(HAVE_WAYLAND) && defined(HAS_GLES)
+#include "wayland/WinSystemWaylandEGLContextGLES.h"
+
+#elif defined(TARGET_LINUX) && defined(HAVE_GBM) && defined(HAS_GLES)
+#include "gbm/WinSystemGbmGLESContext.h"
+
+#elif defined(TARGET_LINUX) && defined(HAVE_MIR) && defined(HAS_GL)
+#include "mir/WinSystemMirGLContext.h"
+
+#elif defined(TARGET_LINUX) && defined(HAVE_MIR) && defined(HAS_GLES)
+#include "mir/WinSystemMirGLESContext.h"
+
+#elif defined(TARGET_LINUX)   && defined(HAVE_X11)   && defined(HAS_GL)
+#include "X11/WinSystemX11GLContext.h"
+
+#elif defined(TARGET_LINUX)   && defined(HAS_GLES) && defined(HAS_EGL) && !defined(HAVE_X11)
 #include "egl/WinSystemEGL.h"
 
 #elif defined(TARGET_FREEBSD)   && defined(HAS_GL)   && defined(HAVE_X11)
 #include "X11/WinSystemX11GL.h"
-
-#elif defined(TARGET_FREEBSD)   && defined(HAS_GLES) && defined(HAVE_X11)
-#include "X11/WinSystemX11GLES.h"
 
 #elif defined(TARGET_FREEBSD) && defined(HAS_GLES) && defined(HAS_EGL)
 #include "egl/WinSystemGLES.h"

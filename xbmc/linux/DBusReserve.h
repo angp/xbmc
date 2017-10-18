@@ -19,10 +19,10 @@
  */
 #pragma once
 #include "system.h"
-#include "utils/StdString.h"
+#include <string>
 #include <vector>
 
-struct DBusConnection;
+#include "DBusUtil.h"
 
 class CDBusReserve
 {
@@ -30,11 +30,11 @@ public:
   CDBusReserve();
  ~CDBusReserve();
 
-  bool AcquireDevice(const CStdString &device);
-  bool ReleaseDevice(const CStdString &device);
+  bool AcquireDevice(const std::string &device);
+  bool ReleaseDevice(const std::string &device);
 
 private:
-  DBusConnection *m_conn;
-  std::vector<CStdString> m_devs;
+  CDBusConnection m_conn;
+  std::vector<std::string> m_devs;
 };
 

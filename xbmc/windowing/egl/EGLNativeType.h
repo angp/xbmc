@@ -20,6 +20,9 @@
  *
  */
 
+#include <string>
+#include <vector>
+
 #include "guilib/Resolution.h"
 #include "EGLQuirks.h"
 
@@ -55,7 +58,7 @@ public:
     \sa: Destroy() */
   virtual ~CEGLNativeType(){};
 
-/*! \brief Unique identifier for this EGL implementaiton.
+/*! \brief Unique identifier for this EGL implementation.
 
    It should be unique enough to set it apart from other possible implementations
    on a similar platform. */

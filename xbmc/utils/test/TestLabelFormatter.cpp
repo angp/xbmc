@@ -18,6 +18,7 @@
  *
  */
 
+#include "ServiceBroker.h"
 #include "utils/LabelFormatter.h"
 #include "filesystem/File.h"
 #include "settings/Settings.h"
@@ -33,31 +34,32 @@ class TestLabelFormatter : public testing::Test
 protected:
   TestLabelFormatter()
   {
+    //! @todo implement
     /* TODO
-    CSettingsCategory* fl = CSettings::Get().AddCategory(7, "filelists", 14081);
-    CSettings::Get().AddBool(fl, "filelists.showparentdiritems", 13306, true);
-    CSettings::Get().AddBool(fl, "filelists.showextensions", 497, true);
-    CSettings::Get().AddBool(fl, "filelists.ignorethewhensorting", 13399, true);
-    CSettings::Get().AddBool(fl, "filelists.allowfiledeletion", 14071, false);
-    CSettings::Get().AddBool(fl, "filelists.showaddsourcebuttons", 21382,  true);
-    CSettings::Get().AddBool(fl, "filelists.showhidden", 21330, false);
+    CSettingsCategory* fl = CServiceBroker::GetSettings().AddCategory(7, "filelists", 14081);
+    CServiceBroker::GetSettings().AddBool(fl, CSettings::SETTING_FILELISTS_SHOWPARENTDIRITEMS, 13306, true);
+    CServiceBroker::GetSettings().AddBool(fl, CSettings::SETTING_FILELISTS_SHOWEXTENSIONS, 497, true);
+    CServiceBroker::GetSettings().AddBool(fl, CSettings::SETTING_FILELISTS_IGNORETHEWHENSORTING, 13399, true);
+    CServiceBroker::GetSettings().AddBool(fl, CSettings::SETTING_FILELISTS_ALLOWFILEDELETION, 14071, false);
+    CServiceBroker::GetSettings().AddBool(fl, CSettings::SETTING_FILELISTS_SHOWADDSOURCEBUTTONS, 21382,  true);
+    CServiceBroker::GetSettings().AddBool(fl, CSettings::SETTING_FILELISTS_SHOWHIDDEN, 21330, false);
     */
   }
 
-  ~TestLabelFormatter()
+  ~TestLabelFormatter() override
   {
-    CSettings::Get().Unload();
+    CServiceBroker::GetSettings().Unload();
   }
 };
 
 TEST_F(TestLabelFormatter, FormatLabel)
 {
   XFILE::CFile *tmpfile;
-  CStdString tmpfilepath, destpath;
+  std::string tmpfilepath, destpath;
   LABEL_MASKS labelMasks;
   CLabelFormatter formatter("", labelMasks.m_strLabel2File);
 
-  ASSERT_TRUE((tmpfile = XBMC_CREATETEMPFILE("")));
+  ASSERT_NE(nullptr, (tmpfile = XBMC_CREATETEMPFILE("")));
   tmpfilepath = XBMC_TEMPFILEPATH(tmpfile);
 
   CFileItemPtr item(new CFileItem(tmpfilepath));
@@ -73,11 +75,11 @@ TEST_F(TestLabelFormatter, FormatLabel)
 TEST_F(TestLabelFormatter, FormatLabel2)
 {
   XFILE::CFile *tmpfile;
-  CStdString tmpfilepath, destpath;
+  std::string tmpfilepath, destpath;
   LABEL_MASKS labelMasks;
   CLabelFormatter formatter("", labelMasks.m_strLabel2File);
 
-  ASSERT_TRUE((tmpfile = XBMC_CREATETEMPFILE("")));
+  ASSERT_NE(nullptr, (tmpfile = XBMC_CREATETEMPFILE("")));
   tmpfilepath = XBMC_TEMPFILEPATH(tmpfile);
 
   CFileItemPtr item(new CFileItem(tmpfilepath));

@@ -45,7 +45,7 @@ struct OMXCoreVideoBuffer;
 // should be entirely filled by all codecs
 struct DVDVideoPicture
 {
-  double pts; // timestamp in seconds, used in the CDVDPlayer class to keep track of pts
+  double pts; // timestamp in seconds, used in the CVideoPlayer class to keep track of pts
   double dts;
 
   union
@@ -89,8 +89,8 @@ struct DVDVideoPicture
   unsigned int extended_format;
   int iGroupId;
 
-  int8_t* qscale_table; // Quantization parameters, primarily used by filters
-  int qscale_stride;
+  int8_t* qp_table; // Quantization parameters, primarily used by filters
+  int qstride;
   int qscale_type;
 
   unsigned int iWidth;
@@ -177,16 +177,6 @@ public:
    */
   virtual bool GetPicture(DVDVideoPicture* pDvdVideoPicture) = 0;
 
-
-  /*
-   * returns true if successfull
-   * the data is cleared to zero
-   */ 
-  virtual bool ClearPicture(DVDVideoPicture* pDvdVideoPicture)
-  {
-    memset(pDvdVideoPicture, 0, sizeof(DVDVideoPicture));
-    return true;
-  }
 
   /*
    * returns true if successfull

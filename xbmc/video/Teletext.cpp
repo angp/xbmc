@@ -29,33 +29,15 @@
 #include "Teletext.h"
 #include "Application.h"
 #include "utils/log.h"
-#include "utils/TimeUtils.h"
 #include "filesystem/SpecialProtocol.h"
 #include "guilib/GraphicContext.h"
-#include "cores/IPlayer.h"
 
-#ifdef HAS_SDL
-#include <SDL/SDL_stdinc.h>
-#else
-#define SDL_memset4(dst, val, len)		\
-do {						\
-	uint32_t _count = (len);		\
-	uint32_t _n = (_count + 3) / 4;		\
-	uint32_t *_p = static_cast<uint32_t *>(dst);	\
-	uint32_t _val = (val);			\
-	if (len == 0) break;			\
-        switch (_count % 4) {			\
-        case 0: do {    *_p++ = _val;		\
-        case 3:         *_p++ = _val;		\
-        case 2:         *_p++ = _val;		\
-        case 1:         *_p++ = _val;		\
-		} while ( --_n );		\
-	}					\
-} while(0)
+static inline void SDL_memset4(uint32_t* dst, uint32_t val, size_t len)
+{
+  for (; len > 0; --len)
+    *dst++ = val;
+}
 #define SDL_memcpy4(dst, src, len) memcpy(dst, src, (len) << 2)
-#endif
-
-using namespace std;
 
 static const char *TeletextFont = "special://xbmc/media/Fonts/teletext.ttf";
 
@@ -433,7 +415,7 @@ CTeletextDecoder::CTeletextDecoder()
   m_Manager                      = NULL;
   m_Library                      = NULL;
   m_RenderInfo.ShowFlof          = true;
-  m_RenderInfo.Show39            = true;
+  m_RenderInfo.Show39            = false;
   m_RenderInfo.Showl25           = true;
   m_RenderInfo.Prev_100          = 0x100;
   m_RenderInfo.Prev_10           = 0x100;
@@ -469,9 +451,7 @@ CTeletextDecoder::CTeletextDecoder()
   m_YOffset = 0;
 }
 
-CTeletextDecoder::~CTeletextDecoder()
-{
-}
+CTeletextDecoder::~CTeletextDecoder() = default;
 
 bool CTeletextDecoder::HandleAction(const CAction &action)
 {
@@ -1452,6 +1432,8 @@ void CTeletextDecoder::DoRenderPage(int startrow, int national_subset_bak)
       break;
     }
   }
+  m_RenderInfo.FontWidth_Normal = m_RenderInfo.Width / (m_RenderInfo.nofirst ? 39 : 40);
+  SetFontWidth(m_RenderInfo.FontWidth_Normal);
 
   if (m_RenderInfo.TranspMode || m_RenderInfo.Boxed)
   {
@@ -1530,12 +1512,12 @@ void CTeletextDecoder::DoRenderPage(int startrow, int national_subset_bak)
     {
       RenderCharBB(m_RenderInfo.PageChar[index + col], &m_RenderInfo.PageAtrb[index + col]);
 
-      if (m_RenderInfo.PageAtrb[index + col].doubleh && m_RenderInfo.PageChar[index + col] != 0xff)  /* disable lower char in case of doubleh setting in l25 objects */
+      if (m_RenderInfo.PageAtrb[index + col].doubleh && m_RenderInfo.PageChar[index + col] != 0xff && row < 24-1)  /* disable lower char in case of doubleh setting in l25 objects */
         m_RenderInfo.PageChar[index + col + 40] = 0xff;
-      if (m_RenderInfo.PageAtrb[index + col].doublew)  /* skip next column if double width */
+      if (m_RenderInfo.PageAtrb[index + col].doublew && col < 40-1)  /* skip next column if double width */
       {
         col++;
-        if (m_RenderInfo.PageAtrb[index + col-1].doubleh && m_RenderInfo.PageChar[index + col] != 0xff)  /* disable lower char in case of doubleh setting in l25 objects */
+        if (m_RenderInfo.PageAtrb[index + col - 1].doubleh && m_RenderInfo.PageChar[index + col] != 0xff && row < 24-1)  /* disable lower char in case of doubleh setting in l25 objects */
           m_RenderInfo.PageChar[index + col + 40] = 0xff;
       }
     }
@@ -1647,7 +1629,7 @@ void CTeletextDecoder::Decode_ADIP() /* additional information table */
         return;
       }
 
-      if (b1>8 || b2>9 || b3>9) /* ignore extries with invalid or hex page numbers */
+      if (b1>8 || b2>9 || b3>9) /* ignore entries with invalid or hex page numbers */
       {
         continue;
       }
@@ -2510,7 +2492,7 @@ int CTeletextDecoder::RenderChar(color_t *buffer,    // pointer to render buffer
     }
 
     *pPosX += curfontwidth;
-    return 0;;
+    return 0;
   }
 
   if (Attribute->charset == C_G3)
@@ -2730,8 +2712,6 @@ int CTeletextDecoder::RenderChar(color_t *buffer,    // pointer to render buffer
     case 0xF2:
     case 0xF3:
     case 0xF4:
-    case 0xF5:
-    case 0xF6:
       Char = arrowtable[Char - 0xED];
       break;
     default:
@@ -2749,7 +2729,7 @@ int CTeletextDecoder::RenderChar(color_t *buffer,    // pointer to render buffer
 
 TextPageinfo_t* CTeletextDecoder::DecodePage(bool showl25,             // 1=decode Level2.5-graphics
                                             unsigned char* PageChar,  // page buffer, min. 25*40
-                                            TextPageAttr_t *PageAtrb, // attribut buffer, min 25*40
+                                            TextPageAttr_t *PageAtrb, // attribute buffer, min 25*40
                                             bool HintMode,            // 1=show hidden information
                                             bool showflof)            // 1=decode FLOF-line
 {
@@ -2856,7 +2836,7 @@ TextPageinfo_t* CTeletextDecoder::DecodePage(bool showl25,             // 1=deco
         PageAtrb[i] = atr;
 
       /* decode parity/hamming */
-      for (unsigned int i = 40; i < sizeof(PageChar); i++)
+      for (unsigned int i = 40; i < TELETEXT_PAGE_SIZE; i++)
       {
         PageAtrb[i] = atr;
         p = PageChar + i;
@@ -2901,7 +2881,7 @@ TextPageinfo_t* CTeletextDecoder::DecodePage(bool showl25,             // 1=deco
     held_mosaic  = ' ';
     dhset        = 0;
     IgnoreAtBlackBgSubst = 0;
-    mosaic_pending = esc_pending = 0; // we need to render at least one mosaic char if 'esc' is received immediatly after mosac charset switch on
+    mosaic_pending = esc_pending = 0; // we need to render at least one mosaic char if 'esc' is received immediately after mosaic charset switch on
 
     if (boxed && memchr(&PageChar[row*40], start_box, 40) == 0)
     {

@@ -24,6 +24,7 @@
 #include "filesystem/Directory.h"
 #include "utils/FileUtils.h"
 #include "utils/URIUtils.h"
+#include "URL.h"
 #include "Util.h"
 
 namespace XBMCAddon
@@ -31,10 +32,10 @@ namespace XBMCAddon
 
   namespace xbmcvfs
   {
-    bool copy(const String& strSource, const String& strDestnation)
+    bool copy(const String& strSource, const String& strDestination)
     {
       DelayedCallGuard dg;
-      return XFILE::CFile::Cache(strSource, strDestnation);
+      return XFILE::CFile::Copy(strSource, strDestination);
     }
 
     // delete a file
@@ -51,12 +52,12 @@ namespace XBMCAddon
       return XFILE::CFile::Rename(file,newFile);
     }  
 
-    // check for a file or folder existance, mimics Pythons os.path.exists()
+    // check for a file or folder existence, mimics Pythons os.path.exists()
     bool exists(const String& path)
     {
       DelayedCallGuard dg;
       if (URIUtils::HasSlashAtEnd(path, true))
-        return XFILE::CDirectory::Exists(path);
+        return XFILE::CDirectory::Exists(path, false);
       return XFILE::CFile::Exists(path, false);
     }      
 
@@ -82,8 +83,9 @@ namespace XBMCAddon
 
     Tuple<std::vector<String>, std::vector<String> > listdir(const String& path)
     {
+      DelayedCallGuard dg;
       CFileItemList items;
-      CStdString strSource;
+      std::string strSource;
       strSource = path;
       XFILE::CDirectory::GetDirectory(strSource, items, "", XFILE::DIR_FLAG_NO_FILE_DIRS);
 
@@ -93,17 +95,22 @@ namespace XBMCAddon
 
       for (int i=0; i < items.Size(); i++)
       {
-        CStdString itemPath = items[i]->GetPath();
+        std::string itemPath = items[i]->GetPath();
         
         if (URIUtils::HasSlashAtEnd(itemPath)) // folder
         {
           URIUtils::RemoveSlashAtEnd(itemPath);
-          CStdString strFileName = URIUtils::GetFileName(itemPath);
+          std::string strFileName = URIUtils::GetFileName(itemPath);
+          if (strFileName.empty())
+          {
+            CURL url(itemPath);
+            strFileName = url.GetHostName();
+          }
           ret.first().push_back(strFileName);
         }
         else // file
         {
-          CStdString strFileName = URIUtils::GetFileName(itemPath);
+          std::string strFileName = URIUtils::GetFileName(itemPath);
           ret.second().push_back(strFileName);
         }
       }

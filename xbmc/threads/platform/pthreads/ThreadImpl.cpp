@@ -18,7 +18,6 @@
  *
  */
 
-#include "config.h"
 #include <limits.h>
 #if defined(TARGET_ANDROID)
 #include <unistd.h>
@@ -97,11 +96,14 @@ void CThread::SetThreadInfo()
   else
     userMaxPrio = 0;
 
+  if (geteuid() == 0)
+    userMaxPrio = GetMaxPriority();
+
   // if the user does not have an entry in limits.conf the following
   // call will fail
   if (userMaxPrio > 0)
   {
-    // start thread with nice level of appication
+    // start thread with nice level of application
     int appNice = getpriority(PRIO_PROCESS, getpid());
     if (setpriority(PRIO_PROCESS, m_ThreadOpaque.LwpId, appNice) != 0)
       if (logger) logger->Log(LOGERROR, "%s: error %s", __FUNCTION__, strerror(errno));
@@ -169,6 +171,9 @@ bool CThread::SetPriority(const int iPriority)
     else
       userMaxPrio = 0;
 
+    if (geteuid() == 0)
+      userMaxPrio = GetMaxPriority();
+
     // keep priority in bounds
     int prio = iPriority;
     if (prio >= GetMaxPriority())
@@ -195,7 +200,7 @@ int CThread::GetPriority()
 {
   int iReturn;
 
-  // lwp id is valid after start signel has fired
+  // lwp id is valid after start signal has fired
   m_StartEvent.Wait();
 
   CSingleLock lock(m_CriticalSection);

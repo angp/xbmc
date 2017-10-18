@@ -21,11 +21,11 @@
  */
 
 #include <map>
+#include <string>
 #include <vector>
 
-#include "settings/ISettingCallback.h"
-#include "utils/StdString.h"
-#include "settings/Setting.h"
+#include "settings/lib/ISettingCallback.h"
+#include "settings/lib/Setting.h"
 
 class CFileItem;
 class CMediaSource;
@@ -61,11 +61,11 @@ class CGUIPassword : public ISettingCallback
 {
 public:
   CGUIPassword(void);
-  virtual ~CGUIPassword(void);
-  bool IsItemUnlocked(CFileItem* pItem, const CStdString &strType);
-  bool IsItemUnlocked(CMediaSource* pItem, const CStdString &strType);
-  bool CheckLock(LockType btnType, const CStdString& strPassword, int iHeading);
-  bool CheckLock(LockType btnType, const CStdString& strPassword, int iHeading, bool& bCanceled);
+  ~CGUIPassword(void) override;
+  bool IsItemUnlocked(CFileItem* pItem, const std::string &strType);
+  bool IsItemUnlocked(CMediaSource* pItem, const std::string &strType);
+  bool CheckLock(LockType btnType, const std::string& strPassword, int iHeading);
+  bool CheckLock(LockType btnType, const std::string& strPassword, int iHeading, bool& bCanceled);
   bool IsProfileLockUnlocked(int iProfile=-1);
   bool IsProfileLockUnlocked(int iProfile, bool& bCanceled, bool prompt = true);
   bool IsMasterLockUnlocked(bool bPromptUser);
@@ -82,18 +82,18 @@ public:
   bool CheckSettingLevelLock(const SettingLevel& level, bool enforce = false);
   bool CheckMenuLock(int iWindowID);
   bool SetMasterLockMode(bool bDetails=true);
-  bool LockSource(const CStdString& strType, const CStdString& strName, bool bState);
+  bool LockSource(const std::string& strType, const std::string& strName, bool bState);
   void LockSources(bool lock);
   void RemoveSourceLocks();
-  bool IsDatabasePathUnlocked(const CStdString& strPath, VECSOURCES& vecSources);
+  bool IsDatabasePathUnlocked(const std::string& strPath, VECSOURCES& vecSources);
 
-  virtual void OnSettingAction(const CSetting *setting);
+  void OnSettingAction(std::shared_ptr<const CSetting> setting) override;
 
   bool bMasterUser;
   int iMasterLockRetriesLeft;
 
 private:
-  int VerifyPassword(LockType btnType, const CStdString& strPassword, const CStdString& strHeading);
+  int VerifyPassword(LockType btnType, const std::string& strPassword, const std::string& strHeading);
 };
 
 extern CGUIPassword g_passwordManager;

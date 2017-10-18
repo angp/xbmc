@@ -21,8 +21,8 @@
  */
 
 #include "guilib/GUIDialog.h"
-#include "view/GUIViewControl.h"
 #include "utils/Stopwatch.h"
+#include "view/GUIViewControl.h"
 
 class CFileItemList;
 
@@ -30,22 +30,22 @@ class CGUIWindowLoginScreen : public CGUIWindow
 {
 public:
   CGUIWindowLoginScreen(void);
-  virtual ~CGUIWindowLoginScreen(void);
-  virtual bool OnMessage(CGUIMessage& message);
-  virtual bool OnAction(const CAction &action);
-  virtual bool OnBack(int actionID);
-  virtual void FrameMove();
-  virtual bool HasListItems() const { return true; };
-  virtual CFileItemPtr GetCurrentListItem(int offset = 0);
-  int GetViewContainerID() const { return m_viewControl.GetCurrentControl(); };
+  ~CGUIWindowLoginScreen(void) override;
+  bool OnMessage(CGUIMessage& message) override;
+  bool OnAction(const CAction &action) override;
+  bool OnBack(int actionID) override;
+  void FrameMove() override;
+  bool HasListItems() const override { return true; };
+  CFileItemPtr GetCurrentListItem(int offset = 0) override;
+  int GetViewContainerID() const override { return m_viewControl.GetCurrentControl(); };
   static void LoadProfile(unsigned int profile);
 
 protected:
-  virtual void OnInitWindow();
-  virtual void OnWindowLoaded();
-  virtual void OnWindowUnload();
+  void OnInitWindow() override;
+  void OnWindowLoaded() override;
+  void OnWindowUnload() override;
   void Update();
-  void SetLabel(int iControl, const CStdString& strLabel);
+  void SetLabel(int iControl, const std::string& strLabel);
 
   bool OnPopupMenu(int iItem);
   CGUIViewControl m_viewControl;

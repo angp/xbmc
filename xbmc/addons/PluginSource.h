@@ -28,13 +28,15 @@ class CPluginSource : public CAddon
 {
 public:
 
-  enum Content { UNKNOWN, AUDIO, IMAGE, EXECUTABLE, VIDEO };
+  enum Content { UNKNOWN, AUDIO, IMAGE, EXECUTABLE, VIDEO, GAME };
 
-  CPluginSource(const cp_extension_t *ext);
-  CPluginSource(const AddonProps &props);
-  virtual ~CPluginSource() {}
-  virtual AddonPtr Clone() const;
-  virtual bool IsType(TYPE type) const;
+  static std::unique_ptr<CPluginSource> FromExtension(CAddonInfo addonInfo, const cp_extension_t* ext);
+
+  explicit CPluginSource(CAddonInfo addonInfo);
+  CPluginSource(CAddonInfo addonInfo, const std::string& provides);
+
+  TYPE FullType() const override;
+  bool IsType(TYPE type) const override;
   bool Provides(const Content& content) const
   {
     return content == UNKNOWN ? false : m_providedContent.count(content) > 0;
@@ -45,13 +47,13 @@ public:
     return m_providedContent.size() > 1;
   }
 
-  static Content Translate(const CStdString &content);
+  static Content Translate(const std::string &content);
 private:
   /*! \brief Set the provided content for this plugin
    If no valid content types are passed in, we set the EXECUTABLE type
    \param content a space-separated list of content types
    */
-  void SetProvides(const CStdString &content);
+  void SetProvides(const std::string &content);
   std::set<Content> m_providedContent;
 };
 

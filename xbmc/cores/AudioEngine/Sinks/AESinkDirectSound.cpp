@@ -20,15 +20,14 @@
 
 #define INITGUID
 
+#include <algorithm>
+
 #include "AESinkDirectSound.h"
-#include "utils/Log.h"
+#include "utils/log.h"
 #include <initguid.h>
-#include <Mmreg.h>
 #include <list>
 #include "threads/SingleLock.h"
-#include "utils/SystemInfo.h"
-#include "utils/TimeUtils.h"
-#include "utils/CharsetConverter.h"
+#include "threads/SystemClock.h"
 #include <Audioclient.h>
 #include <Mmreg.h>
 #include <mmdeviceapi.h>
@@ -36,7 +35,9 @@
 #include <Rpc.h>
 #include "cores/AudioEngine/Utils/AEUtil.h"
 #include "utils/StringUtils.h"
+#include "platform/win32/CharsetConverter.h"
 #pragma comment(lib, "Rpcrt4.lib")
+
 
 extern HWND g_hWnd;
 
@@ -90,20 +91,14 @@ static const winEndpointsToAEDeviceType winEndpoints[EndpointFormFactor_enum_cou
 };
 
 // implemented in AESinkWASAPI.cpp
-extern CStdStringA localWideToUtf(LPCWSTR wstr);
+extern std::string localWideToUtf(LPCWSTR wstr);
 
 static BOOL CALLBACK DSEnumCallback(LPGUID lpGuid, LPCTSTR lpcstrDescription, LPCTSTR lpcstrModule, LPVOID lpContext)
 {
   DSDevice dev;
   std::list<DSDevice> &enumerator = *static_cast<std::list<DSDevice>*>(lpContext);
 
-  int bufSize = MultiByteToWideChar(CP_ACP, 0, lpcstrDescription, -1, NULL, 0);
-  CStdStringW strW (L"", bufSize);
-  if ( bufSize == 0 || MultiByteToWideChar(CP_ACP, 0, lpcstrDescription, -1, strW.GetBuf(bufSize), bufSize) != bufSize )
-    strW.clear();
-  strW.RelBuf();
-
-  dev.name = localWideToUtf(strW);
+  dev.name = KODI::PLATFORM::WINDOWS::FromW(lpcstrDescription);
 
   dev.lpGuid = lpGuid;
 
@@ -116,6 +111,7 @@ static BOOL CALLBACK DSEnumCallback(LPGUID lpGuid, LPCTSTR lpcstrDescription, LP
 CAESinkDirectSound::CAESinkDirectSound() :
   m_pBuffer       (NULL ),
   m_pDSound       (NULL ),
+  m_encodedFormat (AE_FMT_INVALID),
   m_AvgBytesPerSec(0    ),
   m_dwChunkSize   (0    ),
   m_dwFrameSize   (0    ),
@@ -141,15 +137,15 @@ bool CAESinkDirectSound::Initialize(AEAudioFormat &format, std::string &device)
   if (m_initialized)
     return false;
 
-  LPGUID deviceGUID = NULL;
-  RPC_CSTR wszUuid  = NULL;
+  LPGUID deviceGUID = nullptr;
+  RPC_WSTR wszUuid  = nullptr;
   HRESULT hr = E_FAIL;
   std::string strDeviceGUID = device;
   std::list<DSDevice> DSDeviceList;
   std::string deviceFriendlyName;
   DirectSoundEnumerate(DSEnumCallback, &DSDeviceList);
 
-  if(StringUtils::EndsWith(device, std::string("default")))
+  if(StringUtils::EndsWithNoCase(device, std::string("default")))
     strDeviceGUID = GetDefaultDevice();
 
   for (std::list<DSDevice>::iterator itt = DSDeviceList.begin(); itt != DSDeviceList.end(); ++itt)
@@ -157,7 +153,7 @@ bool CAESinkDirectSound::Initialize(AEAudioFormat &format, std::string &device)
     if ((*itt).lpGuid)
     {
       hr = (UuidToString((*itt).lpGuid, &wszUuid));
-      std::string sztmp = (char*)wszUuid;
+      std::string sztmp = KODI::PLATFORM::WINDOWS::FromW(reinterpret_cast<wchar_t*>(wszUuid));
       std::string szGUID = "{" + std::string(sztmp.begin(), sztmp.end()) + "}";
       if (strcasecmp(szGUID.c_str(), strDeviceGUID.c_str()) == 0)
       {
@@ -190,7 +186,7 @@ bool CAESinkDirectSound::Initialize(AEAudioFormat &format, std::string &device)
   else
     tmp_hWnd = g_hWnd;
 
-  CLog::Log(LOGDEBUG, __FUNCTION__": Using Window handle: %d", tmp_hWnd);
+  CLog::Log(LOGDEBUG, __FUNCTION__": Using Window handle: %p", tmp_hWnd);
 
   hr = m_pDSound->SetCooperativeLevel(tmp_hWnd, DSSCL_PRIORITY);
 
@@ -204,12 +200,19 @@ bool CAESinkDirectSound::Initialize(AEAudioFormat &format, std::string &device)
 
   WAVEFORMATEXTENSIBLE wfxex = {0};
 
+  // clamp samplerate between 44100 and 192000
+  if (format.m_sampleRate < 44100)
+    format.m_sampleRate = 44100;
+
+  if (format.m_sampleRate > 192000)
+    format.m_sampleRate = 192000;
+
   //fill waveformatex
   ZeroMemory(&wfxex, sizeof(WAVEFORMATEXTENSIBLE));
   wfxex.Format.cbSize          = sizeof(WAVEFORMATEXTENSIBLE)-sizeof(WAVEFORMATEX);
   wfxex.Format.nChannels       = format.m_channelLayout.Count();
   wfxex.Format.nSamplesPerSec  = format.m_sampleRate;
-  if (AE_IS_RAW(format.m_dataFormat))
+  if (format.m_dataFormat == AE_FMT_RAW)
   {
     wfxex.dwChannelMask          = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
     wfxex.Format.wFormatTag      = WAVE_FORMAT_DOLBY_AC3_SPDIF;
@@ -231,20 +234,18 @@ bool CAESinkDirectSound::Initialize(AEAudioFormat &format, std::string &device)
 
   m_AvgBytesPerSec = wfxex.Format.nAvgBytesPerSec;
 
-  unsigned int uiFrameCount = (int)(format.m_sampleRate * 0.01); //default to 10ms chunks
+  unsigned int uiFrameCount = (int)(format.m_sampleRate * 0.015); //default to 15ms chunks
   m_dwFrameSize = wfxex.Format.nBlockAlign;
   m_dwChunkSize = m_dwFrameSize * uiFrameCount;
-  m_dwBufferLen = m_dwChunkSize * 12; //120ms total buffer
+  m_dwBufferLen = m_dwChunkSize * 12; //180ms total buffer
 
   // fill in the secondary sound buffer descriptor
   DSBUFFERDESC dsbdesc;
   memset(&dsbdesc, 0, sizeof(DSBUFFERDESC));
   dsbdesc.dwSize = sizeof(DSBUFFERDESC);
   dsbdesc.dwFlags = DSBCAPS_GETCURRENTPOSITION2 /** Better position accuracy */
+                  | DSBCAPS_TRUEPLAYPOSITION    /** Vista+ accurate position */
                   | DSBCAPS_GLOBALFOCUS;         /** Allows background playing */
-
-  if (!g_sysinfo.IsWindowsVersionAtLeast(CSysInfo::WindowsVersionVista))
-    dsbdesc.dwFlags |= DSBCAPS_LOCHARDWARE;     /** Needed for 5.1 on emu101k, fails by design on Vista */
 
   dsbdesc.dwBufferBytes = m_dwBufferLen;
   dsbdesc.lpwfxFormat = (WAVEFORMATEX *)&wfxex;
@@ -274,10 +275,10 @@ bool CAESinkDirectSound::Initialize(AEAudioFormat &format, std::string &device)
 
   AEChannelsFromSpeakerMask(wfxex.dwChannelMask);
   format.m_channelLayout = m_channelLayout;
+  m_encodedFormat = format.m_dataFormat;
   format.m_frames = uiFrameCount;
-  format.m_frameSamples = format.m_frames * format.m_channelLayout.Count();
-  format.m_frameSize = (AE_IS_RAW(format.m_dataFormat) ? wfxex.Format.wBitsPerSample >> 3 : sizeof(float)) * format.m_channelLayout.Count();
-  format.m_dataFormat = AE_IS_RAW(format.m_dataFormat) ? AE_FMT_S16NE : AE_FMT_FLOAT;
+  format.m_frameSize =  ((format.m_dataFormat == AE_FMT_RAW) ? (wfxex.Format.wBitsPerSample >> 3) : sizeof(float)) * format.m_channelLayout.Count();
+  format.m_dataFormat = (format.m_dataFormat == AE_FMT_RAW) ? AE_FMT_S16NE : AE_FMT_FLOAT;
 
   m_format = format;
   m_device = device;
@@ -302,7 +303,6 @@ bool CAESinkDirectSound::Initialize(AEAudioFormat &format, std::string &device)
   CLog::Log(LOGDEBUG, "  Channel Layout  : %s", ((std::string)format.m_channelLayout).c_str());
   CLog::Log(LOGDEBUG, "  Channel Mask    : %d", wfxex.dwChannelMask);
   CLog::Log(LOGDEBUG, "  Frames          : %d", format.m_frames);
-  CLog::Log(LOGDEBUG, "  Frame Samples   : %d", format.m_frameSamples);
   CLog::Log(LOGDEBUG, "  Frame Size      : %d", format.m_frameSize);
 
   return true;
@@ -335,58 +335,21 @@ void CAESinkDirectSound::Deinitialize()
   m_dwBufferLen = 0;
 }
 
-bool CAESinkDirectSound::IsCompatible(const AEAudioFormat &format, const std::string &device)
-{
-  if (!m_initialized || m_isDirtyDS)
-    return false;
-
-  u_int notCompatible         = 0;
-  const u_int numTests        = 6;
-  std::string strDiffBecause ("");
-  static const char* compatibleParams[numTests] = {":Devices",
-                                                   ":Channels",
-                                                   ":Sample Rates",
-                                                   ":Data Formats",
-                                                   ":Bluray Formats",
-                                                   ":Passthrough Formats"};
-
-  notCompatible = (notCompatible  +!((AE_IS_RAW(format.m_dataFormat)  == AE_IS_RAW(m_encodedFormat))        ||
-                                     (!AE_IS_RAW(format.m_dataFormat) == !AE_IS_RAW(m_encodedFormat))))     << 1;
-  notCompatible = (notCompatible  + ((format.m_dataFormat             == AE_FMT_EAC3)                       ||
-                                     (format.m_dataFormat             == AE_FMT_DTSHD                       ||
-                                     (format.m_dataFormat             == AE_FMT_TRUEHD))))                  << 1;
-  notCompatible = (notCompatible  + !(format.m_dataFormat             == m_format.m_dataFormat))            << 1;
-  notCompatible = (notCompatible  + !(format.m_sampleRate             == m_format.m_sampleRate))            << 1;
-  notCompatible = (notCompatible  + !(format.m_channelLayout.Count()  == m_format.m_channelLayout.Count())) << 1;
-  notCompatible = (notCompatible  + !(m_device                        == device));
-
-  if (!notCompatible)
-  {
-    CLog::Log(LOGDEBUG, __FUNCTION__": Formats compatible - reusing existing sink");
-    return true;
-  }
-
-  for (int i = 0; i < numTests ; i++)
-  {
-    strDiffBecause += (notCompatible & 0x01) ? (std::string) compatibleParams[i] : "";
-    notCompatible    = notCompatible >> 1;
-  }
-
-  CLog::Log(LOGDEBUG, __FUNCTION__": Formats Incompatible due to different %s", strDiffBecause.c_str());
-  return false;
-}
-
-unsigned int CAESinkDirectSound::AddPackets(uint8_t *data, unsigned int frames, bool hasAudio, bool blocking)
+unsigned int CAESinkDirectSound::AddPackets(uint8_t **data, unsigned int frames, unsigned int offset)
 {
   if (!m_initialized)
     return 0;
 
   DWORD total = m_dwFrameSize * frames;
   DWORD len = total;
-  unsigned char* pBuffer = (unsigned char*)data;
+  unsigned char* pBuffer = (unsigned char*)data[0]+offset*m_format.m_frameSize;
 
   DWORD bufferStatus = 0;
-  m_pBuffer->GetStatus(&bufferStatus);
+  if (m_pBuffer->GetStatus(&bufferStatus) != DS_OK)
+  {
+    CLog::Log(LOGERROR, "%s: GetStatus() failed", __FUNCTION__);
+    return 0;
+  }
   if (bufferStatus & DSBSTATUS_BUFFERLOST)
   {
     CLog::Log(LOGDEBUG, __FUNCTION__ ": Buffer allocation was lost. Restoring buffer.");
@@ -399,10 +362,7 @@ unsigned int CAESinkDirectSound::AddPackets(uint8_t *data, unsigned int frames, 
       return INT_MAX;
     else
     {
-      if(blocking)
-        Sleep(total * 1000 / m_AvgBytesPerSec);
-      else
-        return 0;
+      Sleep(total * 1000 / m_AvgBytesPerSec);
     }
   }
 
@@ -468,31 +428,20 @@ void CAESinkDirectSound::Drain()
   UpdateCacheStatus();
 }
 
-double CAESinkDirectSound::GetDelay()
+void CAESinkDirectSound::GetDelay(AEDelayStatus& status)
 {
   if (!m_initialized)
-    return 0.0;
+  {
+    status.SetDelay(0);
+    return;
+  }
 
   /* Make sure we know how much data is in the cache */
   if (!UpdateCacheStatus())
     m_isDirtyDS = true;
 
   /** returns current cached data duration in seconds */
-  double delay = (double)m_CacheLen / (double)m_AvgBytesPerSec;
-  return delay;
-}
-
-double CAESinkDirectSound::GetCacheTime()
-{
-  if (!m_initialized)
-    return 0.0;
-
-  /* Make sure we know how much data is in the cache */
-  UpdateCacheStatus();
-
-  /** returns current cached data duration in seconds */
-  double delay = (double)m_CacheLen / (double)m_AvgBytesPerSec;
-  return delay;
+  status.SetDelay((double)m_CacheLen / (double)m_AvgBytesPerSec);
 }
 
 double CAESinkDirectSound::GetCacheTotal()
@@ -511,55 +460,6 @@ void CAESinkDirectSound::EnumerateDevicesEx(AEDeviceInfoList &deviceInfoList, bo
   HRESULT                hr;
 
   std::string strDD = GetDefaultDevice();
-
-  /* See if we are on Windows XP */
-  if (!g_sysinfo.IsWindowsVersionAtLeast(CSysInfo::WindowsVersionVista))
-  {
-    /* We are on XP - WASAPI not supported - enumerate using DS devices */
-    LPGUID deviceGUID = NULL;
-    RPC_CSTR cszGUID;
-    std::string szGUID;
-    std::list<DSDevice> DSDeviceList;
-    DirectSoundEnumerate(DSEnumCallback, &DSDeviceList);
-
-    for(std::list<DSDevice>::iterator itt = DSDeviceList.begin(); itt != DSDeviceList.end(); ++itt)
-    {
-      if (UuidToString((*itt).lpGuid, &cszGUID) != RPC_S_OK)
-        continue;  /* could not convert GUID to string - skip device */
-
-      deviceInfo.m_channels.Reset();
-      deviceInfo.m_dataFormats.clear();
-      deviceInfo.m_sampleRates.clear();
-
-      szGUID = (LPSTR)cszGUID;
-
-      deviceInfo.m_deviceName = "{" + szGUID + "}";
-      deviceInfo.m_displayName = (*itt).name;
-      deviceInfo.m_displayNameExtra = std::string("DirectSound: ") + (*itt).name;
-
-      deviceInfo.m_deviceType = AE_DEVTYPE_PCM;
-      deviceInfo.m_channels   = layoutsByChCount[2];
-
-      deviceInfo.m_dataFormats.push_back(AEDataFormat(AE_FMT_FLOAT));
-      deviceInfo.m_dataFormats.push_back(AEDataFormat(AE_FMT_AC3));
-
-      deviceInfo.m_sampleRates.push_back((DWORD) 96000);
-
-      deviceInfoList.push_back(deviceInfo);
-
-      // add the default device with m_deviceName = default
-      if(strDD == deviceInfo.m_deviceName)
-      {
-        deviceInfo.m_deviceName = std::string("default");
-        deviceInfo.m_displayName = std::string("default");
-        deviceInfo.m_displayNameExtra = std::string("");
-        deviceInfoList.push_back(deviceInfo);
-      }
-    }
-
-    RpcStringFree(&cszGUID);
-    return;
-  }
 
   /* Windows Vista or later - supporting WASAPI device probing */
   hr = CoCreateInstance(CLSID_MMDeviceEnumerator, NULL, CLSCTX_ALL, IID_IMMDeviceEnumerator, (void**)&pEnumerator);
@@ -652,7 +552,17 @@ void CAESinkDirectSound::EnumerateDevicesEx(AEDeviceInfoList &deviceInfoList, bo
       WAVEFORMATEX* smpwfxex = (WAVEFORMATEX*)varName.blob.pBlobData;
       deviceInfo.m_channels = layoutsByChCount[std::max(std::min(smpwfxex->nChannels, (WORD) DS_SPEAKER_COUNT), (WORD) 2)];
       deviceInfo.m_dataFormats.push_back(AEDataFormat(AE_FMT_FLOAT));
-      deviceInfo.m_dataFormats.push_back(AEDataFormat(AE_FMT_AC3));
+      if (aeDeviceType != AE_DEVTYPE_PCM)
+      {
+        deviceInfo.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_AC3);
+        // DTS is played with the same infrastructure as AC3
+        deviceInfo.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTSHD_CORE);
+        deviceInfo.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTS_1024);
+        deviceInfo.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTS_2048);
+        deviceInfo.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTS_512);
+        // signal that we can doe AE_FMT_RAW
+        deviceInfo.m_dataFormats.push_back(AE_FMT_RAW);
+      }
       deviceInfo.m_sampleRates.push_back(std::min(smpwfxex->nSamplesPerSec, (DWORD) 192000));
     }
     else
@@ -666,9 +576,10 @@ void CAESinkDirectSound::EnumerateDevicesEx(AEDeviceInfoList &deviceInfoList, bo
 
     deviceInfo.m_deviceName       = strDevName;
     deviceInfo.m_displayName      = strWinDevType.append(strFriendlyName);
-    deviceInfo.m_displayNameExtra = std::string("DirectSound: ").append(strFriendlyName);
+    deviceInfo.m_displayNameExtra = std::string("DIRECTSOUND: ").append(strFriendlyName);
     deviceInfo.m_deviceType       = aeDeviceType;
 
+    deviceInfo.m_wantsIECPassthrough = true;
     deviceInfoList.push_back(deviceInfo);
 
     // add the default device with m_deviceName = default
@@ -677,6 +588,7 @@ void CAESinkDirectSound::EnumerateDevicesEx(AEDeviceInfoList &deviceInfoList, bo
       deviceInfo.m_deviceName = std::string("default");
       deviceInfo.m_displayName = std::string("default");
       deviceInfo.m_displayNameExtra = std::string("");
+      deviceInfo.m_wantsIECPassthrough = true;
       deviceInfoList.push_back(deviceInfo);
     }
   }
@@ -698,7 +610,11 @@ failed:
 void CAESinkDirectSound::CheckPlayStatus()
 {
   DWORD status = 0;
-  m_pBuffer->GetStatus(&status);
+  if (m_pBuffer->GetStatus(&status) != DS_OK)
+  {
+    CLog::Log(LOGERROR, "%s: GetStatus() failed", __FUNCTION__);
+    return;
+  }
 
   if (!(status & DSBSTATUS_PLAYING) && m_CacheLen != 0) // If we have some data, see if we can start playback
   {
@@ -831,6 +747,12 @@ const char *CAESinkDirectSound::dserr2str(int err)
     case DSERR_UNINITIALIZED: return "DSERR_UNINITIALIZED";
     case DSERR_NOINTERFACE: return "DSERR_NOINTERFACE";
     case DSERR_ACCESSDENIED: return "DSERR_ACCESSDENIED";
+    case DSERR_BUFFERTOOSMALL: return "DSERR_BUFFERTOOSMALL";
+    case DSERR_DS8_REQUIRED: return "DSERR_DS8_REQUIRED";
+    case DSERR_SENDLOOP: return "DSERR_SENDLOOP";
+    case DSERR_BADSENDBUFFERGUID: return "DSERR_BADSENDBUFFERGUID";
+    case DSERR_OBJECTNOTFOUND: return "DSERR_OBJECTNOTFOUND";
+    case DSERR_FXUNAVAILABLE: return "DSERR_FXUNAVAILABLE";
     default: return "unknown";
   }
 }
@@ -929,16 +851,4 @@ failed:
   SAFE_RELEASE(pEnumerator);
 
   return strDevName;
-}
-
-bool CAESinkDirectSound::SoftSuspend()
-{
-  Deinitialize();
-  return true;
-}
-
-bool CAESinkDirectSound::SoftResume()
-{
-  /* Return false to force re-init by engine */
-  return false;
 }

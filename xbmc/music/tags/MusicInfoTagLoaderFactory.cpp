@@ -23,106 +23,91 @@
 #include "TagLoaderTagLib.h"
 #include "MusicInfoTagLoaderCDDA.h"
 #include "MusicInfoTagLoaderShn.h"
-#include "MusicInfoTagLoaderWav.h"
-#ifdef HAS_MOD_PLAYER
-#include "cores/ModPlayer.h"
-#endif
-#include "MusicInfoTagLoaderNSF.h"
-#include "MusicInfoTagLoaderSPC.h"
-#include "MusicInfoTagLoaderYM.h"
 #include "MusicInfoTagLoaderDatabase.h"
-#include "MusicInfoTagLoaderASAP.h"
-#include "MusicInfoTagLoaderMidi.h"
-
+#include "MusicInfoTagLoaderFFmpeg.h"
+#include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "FileItem.h"
+#include "ServiceBroker.h"
 
-#ifdef HAS_ASAP_CODEC
-#include "cores/paplayer/ASAPCodec.h"
-#endif
+#include "addons/binary-addons/BinaryAddonBase.h"
+#include "addons/AudioDecoder.h"
+
+using namespace ADDON;
 
 using namespace MUSIC_INFO;
 
-CMusicInfoTagLoaderFactory::CMusicInfoTagLoaderFactory()
-{}
+CMusicInfoTagLoaderFactory::CMusicInfoTagLoaderFactory() = default;
 
-CMusicInfoTagLoaderFactory::~CMusicInfoTagLoaderFactory()
-{}
+CMusicInfoTagLoaderFactory::~CMusicInfoTagLoaderFactory() = default;
 
-IMusicInfoTagLoader* CMusicInfoTagLoaderFactory::CreateLoader(const CStdString& strFileName)
+IMusicInfoTagLoader* CMusicInfoTagLoaderFactory::CreateLoader(const CFileItem& item)
 {
   // dont try to read the tags for streams & shoutcast
-  CFileItem item(strFileName, false);
   if (item.IsInternetStream())
     return NULL;
 
   if (item.IsMusicDb())
     return new CMusicInfoTagLoaderDatabase();
 
-  CStdString strExtension = URIUtils::GetExtension(strFileName);
-  strExtension.ToLower();
-  strExtension.TrimLeft('.');
+  std::string strExtension = URIUtils::GetExtension(item.GetPath());
+  StringUtils::ToLower(strExtension);
+  StringUtils::TrimLeft(strExtension, ".");
 
-  if (strExtension.IsEmpty())
+  if (strExtension.empty())
     return NULL;
+
+  BinaryAddonBaseList addonInfos;
+  CServiceBroker::GetBinaryAddonManager().GetAddonInfos(addonInfos, true, ADDON_AUDIODECODER);
+  for (const auto& addonInfo : addonInfos)
+  {
+    if (CAudioDecoder::HasTags(addonInfo) &&
+        CAudioDecoder::GetExtensions(addonInfo).find("."+strExtension) != std::string::npos)
+    {
+      CAudioDecoder* result = new CAudioDecoder(addonInfo);
+      if (!result->CreateDecoder())
+      {
+        delete result;
+        return nullptr;
+      }
+      return result;
+    }
+  }
 
   if (strExtension == "aac" ||
       strExtension == "ape" || strExtension == "mac" ||
       strExtension == "mp3" || 
       strExtension == "wma" || 
       strExtension == "flac" || 
-      strExtension == "m4a" || strExtension == "mp4" ||
+      strExtension == "m4a" || strExtension == "mp4" || strExtension == "m4b" ||
+      strExtension == "m4v" ||
       strExtension == "mpc" || strExtension == "mpp" || strExtension == "mp+" ||
       strExtension == "ogg" || strExtension == "oga" || strExtension == "oggstream" ||
-#ifdef HAS_MOD_PLAYER
-      ModPlayer::IsSupportedFormat(strExtension) ||
-      strExtension == "mod" || strExtension == "nsf" || strExtension == "nsfstream" ||
+      strExtension == "opus" ||
+      strExtension == "aif" || strExtension == "aiff" ||
+      strExtension == "wav" ||
+      strExtension == "mod" ||
       strExtension == "s3m" || strExtension == "it" || strExtension == "xm" ||
-#endif
       strExtension == "wv")
   {
     CTagLoaderTagLib *pTagLoader = new CTagLoaderTagLib();
-    return (IMusicInfoTagLoader*)pTagLoader;
+    return pTagLoader;
   }
 #ifdef HAS_DVD_DRIVE
   else if (strExtension == "cdda")
   {
     CMusicInfoTagLoaderCDDA *pTagLoader = new CMusicInfoTagLoaderCDDA();
-    return (IMusicInfoTagLoader*)pTagLoader;
+    return pTagLoader;
   }
 #endif
   else if (strExtension == "shn")
   {
     CMusicInfoTagLoaderSHN *pTagLoader = new CMusicInfoTagLoaderSHN();
-    return (IMusicInfoTagLoader*)pTagLoader;
+    return pTagLoader;
   }
-  else if (strExtension == "wav")
-  {
-    CMusicInfoTagLoaderWAV *pTagLoader = new CMusicInfoTagLoaderWAV();
-    return (IMusicInfoTagLoader*)pTagLoader;
-  }
-  else if (strExtension == "spc")
-  {
-    CMusicInfoTagLoaderSPC *pTagLoader = new CMusicInfoTagLoaderSPC();
-    return (IMusicInfoTagLoader*)pTagLoader;
-  }
-  else if (strExtension == "ym")
-  {
-    CMusicInfoTagLoaderYM *pTagLoader = new CMusicInfoTagLoaderYM();
-    return (IMusicInfoTagLoader*)pTagLoader;
-  }
-#ifdef HAS_ASAP_CODEC
-  else if (ASAPCodec::IsSupportedFormat(strExtension) || strExtension == "asapstream")
-  {
-    CMusicInfoTagLoaderASAP *pTagLoader = new CMusicInfoTagLoaderASAP();
-    return (IMusicInfoTagLoader*)pTagLoader;
-  }
-#endif
-  else if ( TimidityCodec::IsSupportedFormat( strExtension ) )
-  {
-    CMusicInfoTagLoaderMidi * pTagLoader = new CMusicInfoTagLoaderMidi();
-    return (IMusicInfoTagLoader*)pTagLoader;
-  }
+  else if (strExtension == "mka" || strExtension == "dsf" ||
+           strExtension == "dff")
+    return new CMusicInfoTagLoaderFFmpeg();
 
   return NULL;
 }

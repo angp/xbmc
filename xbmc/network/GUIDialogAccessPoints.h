@@ -1,5 +1,5 @@
-#ifndef GUI_DIALOG_ACCES_POINTS
-#define GUI_DIALOG_ACCES_POINTS
+#ifndef GUI_DIALOG_ACCESS_POINTS
+#define GUI_DIALOG_ACCESS_POINTS
 
 /*
  *      Copyright (C) 2005-2013 Team XBMC
@@ -33,18 +33,18 @@ class CGUIDialogAccessPoints : public CGUIDialog
 {
 public:
   CGUIDialogAccessPoints(void);
-  virtual ~CGUIDialogAccessPoints(void);
-  virtual void OnInitWindow();
-  virtual bool OnAction(const CAction &action);
-  void SetInterfaceName(CStdString interfaceName);
-  CStdString GetSelectedAccessPointEssId();
+  ~CGUIDialogAccessPoints(void) override;
+  void OnInitWindow() override;
+  bool OnAction(const CAction &action) override;
+  void SetInterfaceName(std::string interfaceName);
+  std::string GetSelectedAccessPointEssId();
   EncMode GetSelectedAccessPointEncMode();
   bool WasItemSelected();
 
 private:
   std::vector<NetworkAccessPoint> m_aps;
-  CStdString m_interfaceName;
-  CStdString m_selectedAPEssId;
+  std::string m_interfaceName;
+  std::string m_selectedAPEssId;
   EncMode m_selectedAPEncMode;
   bool m_wasItemSelected;
   CFileItemList *m_accessPoints;

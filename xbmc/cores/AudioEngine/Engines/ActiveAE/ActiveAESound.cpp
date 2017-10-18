@@ -18,29 +18,31 @@
  *
  */
 
-#include "Interfaces/AESound.h"
-
-#include "AEFactory.h"
-#include "AEAudioFormat.h"
+#include "cores/AudioEngine/Interfaces/AESound.h"
 #include "ActiveAE.h"
 #include "ActiveAESound.h"
 #include "utils/log.h"
-#include "DllAvUtil.h"
+
+extern "C" {
+#include "libavutil/avutil.h"
+}
 
 using namespace ActiveAE;
 using namespace XFILE;
 
-/* typecast AE to CActiveAE */
-#define AE (*((CActiveAE*)CAEFactory::GetEngine()))
-
-CActiveAESound::CActiveAESound(const std::string &filename) :
+CActiveAESound::CActiveAESound(const std::string &filename, CActiveAE *ae) :
   IAESound         (filename),
   m_filename       (filename),
-  m_volume         (1.0f    )
+  m_volume         (1.0f    ),
+  m_channel        (AE_CH_NULL)
 {
   m_orig_sound = NULL;
   m_dst_sound = NULL;
   m_pFile = NULL;
+  m_isSeekPossible = false;
+  m_fileSize = 0;
+  m_isConverted = false;
+  m_activeAE = ae;
 }
 
 CActiveAESound::~CActiveAESound()
@@ -52,17 +54,18 @@ CActiveAESound::~CActiveAESound()
 
 void CActiveAESound::Play()
 {
-  AE.PlaySound(this);
+  m_activeAE->PlaySound(this);
+
 }
 
 void CActiveAESound::Stop()
 {
-  AE.StopSound(this);
+  m_activeAE->StopSound(this);
 }
 
 bool CActiveAESound::IsPlaying()
 {
-  // TODO
+  //! @todo implement
   return false;
 }
 
@@ -129,7 +132,7 @@ bool CActiveAESound::Prepare()
     m_pFile = NULL;
     return false;
   }
-  m_isSeekPosible = m_pFile->IoControl(IOCTRL_SEEK_POSSIBLE, NULL) != 0;
+  m_isSeekPossible = m_pFile->IoControl(IOCTRL_SEEK_POSSIBLE, NULL) != 0;
   m_fileSize = m_pFile->GetLength();
   return true;
 }
@@ -151,7 +154,7 @@ int CActiveAESound::Read(void *h, uint8_t* buf, int size)
   return pFile->Read(buf, size);
 }
 
-offset_t CActiveAESound::Seek(void *h, offset_t pos, int whence)
+int64_t CActiveAESound::Seek(void *h, int64_t pos, int whence)
 {
   CFile* pFile = static_cast<CActiveAESound*>(h)->m_pFile;
   if(whence == AVSEEK_SIZE)

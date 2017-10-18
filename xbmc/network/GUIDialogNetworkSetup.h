@@ -20,10 +20,9 @@
  *
  */
 
-#include "guilib/GUIDialog.h"
+#include "settings/dialogs/GUIDialogSettingsManualBase.h"
 
-class CGUIDialogNetworkSetup :
-      public CGUIDialog
+class CGUIDialogNetworkSetup : public CGUIDialogSettingsManualBase
 {
 public:
   enum NET_PROTOCOL { NET_PROTOCOL_SMB = 0,
@@ -33,43 +32,48 @@ public:
                       NET_PROTOCOL_HTTPS,
                       NET_PROTOCOL_DAV,
                       NET_PROTOCOL_DAVS,
-                      NET_PROTOCOL_DAAP,
                       NET_PROTOCOL_UPNP,
                       NET_PROTOCOL_RSS,
-                      NET_PROTOCOL_HTSP,
-                      NET_PROTOCOL_VTP,
-                      NET_PROTOCOL_MYTH,
-                      NET_PROTOCOL_TUXBOX,
                       NET_PROTOCOL_SFTP,
-                      NET_PROTOCOL_NFS, 
-                      NET_PROTOCOL_AFP};
+                      NET_PROTOCOL_NFS};
   CGUIDialogNetworkSetup(void);
-  virtual ~CGUIDialogNetworkSetup(void);
-  virtual bool OnMessage(CGUIMessage& message);
-  virtual bool OnBack(int actionID);
-  virtual void OnInitWindow();
-  virtual void OnWindowLoaded();
-  virtual void OnDeinitWindow(int nextWindowID);
+  ~CGUIDialogNetworkSetup(void) override;
+  bool OnMessage(CGUIMessage& message) override;
+  bool OnBack(int actionID) override;
+  void OnInitWindow() override;
+  void OnDeinitWindow(int nextWindowID) override;
 
-  static bool ShowAndGetNetworkAddress(CStdString &path);
+  static bool ShowAndGetNetworkAddress(std::string &path);
 
-  CStdString ConstructPath() const;
-  void SetPath(const CStdString &path);
-  bool IsConfirmed() const { return m_confirmed; };
+  std::string ConstructPath() const;
+  void SetPath(const std::string &path);
+  bool IsConfirmed() const override { return m_confirmed; };
 
 protected:
+  // implementations of ISettingCallback
+  void OnSettingChanged(std::shared_ptr<const CSetting> setting) override;
+  void OnSettingAction(std::shared_ptr<const CSetting> setting) override;
+
+  // specialization of CGUIDialogSettingsBase
+  bool AllowResettingSettings() const override { return false; }
+  void Save() override { }
+  void SetupView() override;
+
+  // specialization of CGUIDialogSettingsManualBase
+  void InitializeSettings() override;
+
   void OnProtocolChange();
   void OnServerBrowse();
   void OnOK();
-  void OnCancel();
+  void OnCancel() override;
   void UpdateButtons();
 
   NET_PROTOCOL m_protocol;
-  CStdString m_server;
-  CStdString m_path;
-  CStdString m_username;
-  CStdString m_password;
-  CStdString m_port;
+  std::string m_server;
+  std::string m_path;
+  std::string m_username;
+  std::string m_password;
+  std::string m_port;
 
   bool m_confirmed;
 };

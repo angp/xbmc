@@ -1,9 +1,8 @@
-#ifndef _ENCODERFFMPEG_H
-#define _ENCODERFFMPEG_H
+#pragma once
 
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      Copyright (C) 2005-2015 Team Kodi
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -16,32 +15,29 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
+ *  along with Kodi; see the file COPYING.  If not, see
  *  <http://www.gnu.org/licenses/>.
  *
  */
 
-#include "Encoder.h"
-#include "DllAvFormat.h"
-#include "DllAvCodec.h"
-#include "DllAvUtil.h"
-#include "DllSwResample.h"
+#include "IEncoder.h"
 
-class CEncoderFFmpeg : public CEncoder
+extern "C" {
+#include "libavformat/avformat.h"
+#include "libavcodec/avcodec.h"
+#include "libswresample/swresample.h"
+}
+
+class CEncoderFFmpeg : public IEncoder
 {
 public:
   CEncoderFFmpeg();
-  virtual ~CEncoderFFmpeg() {}
-  bool Init(const char* strFile, int iInChannels, int iInRate, int iInBits);
-  int Encode(int nNumBytesRead, uint8_t* pbtStream);
-  bool Close();
-  void AddTag(int key, const char* value);
+  ~CEncoderFFmpeg() override = default;
 
+  bool Init(AddonToKodiFuncTable_AudioEncoder& callbacks) override;
+  int Encode(int nNumBytesRead, uint8_t *pbtStream) override;
+  bool Close() override;
 private:
-  DllAvCodec  m_dllAvCodec;
-  DllAvUtil   m_dllAvUtil;
-  DllAvFormat m_dllAvFormat;
-  DllSwResample m_dllSwResample;
 
   AVFormatContext  *m_Format;
   AVCodecContext   *m_CodecCtx;
@@ -59,8 +55,7 @@ private:
   unsigned char     m_BCBuffer[4096];
   static int        avio_write_callback(void *opaque, uint8_t *buf, int buf_size);
   static int64_t    avio_seek_callback(void *opaque, int64_t offset, int whence);
-  void              SetTag(const CStdString tag, const CStdString value);
-
+  void              SetTag(const std::string &tag, const std::string &value);
 
   unsigned int      m_NeededFrames;
   unsigned int      m_NeededBytes;
@@ -72,7 +67,8 @@ private:
   AVFrame          *m_ResampledFrame;
   bool              m_NeedConversion;
 
+  AddonToKodiFuncTable_AudioEncoder m_callbacks;
+
   bool WriteFrame();
 };
 
-#endif // _ENCODERFFMPEG_H

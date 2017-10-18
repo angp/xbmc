@@ -43,7 +43,7 @@ public class PythonTools
 
    /**
     * This method will take the parameter list from the method node passed
-    * and will convert it to a Pythonn argument string for PyArg_ParseTupleAndKeywords
+    * and will convert it to a Python argument string for PyArg_ParseTupleAndKeywords
     */
    public static String makeFormatStringFromParameters(Node method)
    {
@@ -72,7 +72,7 @@ public class PythonTools
    /**
     * This method gets the FULL class name as a variable including the 
     * namespace. If converts all of the '::' references to '_' so 
-    * that the result can be used in part, or in whold, as a variable name
+    * that the result can be used in part, or in whole, as a variable name
     */
    public static String getClassNameAsVariable(Node clazz) { return Helper.findFullClassName(clazz).replaceAll('::','_') }
 
@@ -92,12 +92,25 @@ public class PythonTools
       // if this is a destructor node then the methodtype best reflect that
       assert (method.name() != 'destructor' || methodType == MethodType.destructor), 'Cannot use a destructor node and not identify the type as a destructor' + method
 
-      return (clazz == null) ? method.@sym_name :
-      (
-      (methodType == MethodType.constructor) ? (clazz + "_New") :
-      (methodType == MethodType.destructor ? (clazz + "_Dealloc") : 
-       ((method.@name.startsWith("operator ") && "[]" == method.@name.substring(9)) ? "${clazz}_operatorIndex_" : clazz + "_" + method.@sym_name))
-      )
+      if (clazz == null)
+        return method.@sym_name
+
+      if (methodType == MethodType.constructor)
+        return clazz + "_New"
+
+      if (methodType == MethodType.destructor)
+        return clazz + "_Dealloc"
+
+      if (method.@name.startsWith("operator "))
+      {
+        if ("[]" == method.@name.substring(9))
+          return clazz + "_operatorIndex_"
+
+        if ("()" == method.@name.substring(9))
+          return clazz + "_callable_"
+      }
+
+      return clazz + "_" + method.@sym_name;
    }
 
   public static String makeDocString(Node docnode)

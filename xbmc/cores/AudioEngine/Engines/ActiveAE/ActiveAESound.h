@@ -19,9 +19,7 @@
  *
  */
 
-#include "utils/StdString.h"
-#include "Interfaces/AESound.h"
-#include "ActiveAEResample.h"
+#include "cores/AudioEngine/Interfaces/AESound.h"
 #include "filesystem/File.h"
 
 class DllAvUtil;
@@ -29,18 +27,22 @@ class DllAvUtil;
 namespace ActiveAE
 {
 
+class CActiveAE;
+
 class CActiveAESound : public IAESound
 {
 public:
-  CActiveAESound (const std::string &filename);
-  virtual ~CActiveAESound();
+  CActiveAESound (const std::string &filename, CActiveAE *ae);
+  ~CActiveAESound() override;
 
-  virtual void Play();
-  virtual void Stop();
-  virtual bool IsPlaying();
+  void Play() override;
+  void Stop() override;
+  bool IsPlaying() override;
 
-  virtual void SetVolume(float volume) { m_volume = std::max(0.0f, std::min(1.0f, volume)); }
-  virtual float GetVolume() { return m_volume; }
+  void SetChannel(AEChannel channel) override { m_channel = channel; }
+  AEChannel GetChannel() override { return m_channel; }
+  void SetVolume(float volume) override { m_volume = std::max(0.0f, std::min(1.0f, volume)); }
+  float GetVolume() override { return m_volume; }
 
   uint8_t** InitSound(bool orig, SampleConfig config, int nb_samples);
   bool StoreSound(bool orig, uint8_t **buffer, int samples, int linesize);
@@ -53,17 +55,19 @@ public:
   void Finish();
   int GetChunkSize();
   int GetFileSize() { return m_fileSize; }
-  bool IsSeekPosible() { return m_isSeekPosible; }
+  bool IsSeekPossible() { return m_isSeekPossible; }
 
   static int Read(void *h, uint8_t* buf, int size);
-  static offset_t Seek(void *h, offset_t pos, int whence);
+  static int64_t Seek(void *h, int64_t pos, int whence);
 
 protected:
+  CActiveAE *m_activeAE;
   std::string m_filename;
   XFILE::CFile *m_pFile;
-  bool m_isSeekPosible;
+  bool m_isSeekPossible;
   int m_fileSize;
   float m_volume;
+  AEChannel m_channel;
 
   CSoundPacket *m_orig_sound;
   CSoundPacket *m_dst_sound;

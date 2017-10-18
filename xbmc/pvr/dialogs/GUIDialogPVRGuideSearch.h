@@ -19,41 +19,43 @@
  *
  */
 
-#include "guilib/GUIDialog.h"
 #include "XBDateTime.h"
-
-namespace EPG
-{
-  struct EpgSearchFilter;
-}
+#include "guilib/GUIDialog.h"
 
 namespace PVR
 {
+  class CPVREpgSearchFilter;
+
   class CGUIDialogPVRGuideSearch : public CGUIDialog
   {
   public:
     CGUIDialogPVRGuideSearch(void);
-    virtual ~CGUIDialogPVRGuideSearch(void) {}
-    virtual bool OnMessage(CGUIMessage& message);
-    virtual void OnWindowLoaded();
+    ~CGUIDialogPVRGuideSearch(void) override = default;
+    bool OnMessage(CGUIMessage& message) override;
+    void OnWindowLoaded() override;
 
-    void SetFilterData(EPG::EpgSearchFilter *searchFilter) { m_searchFilter = searchFilter; }
+    void SetFilterData(CPVREpgSearchFilter *searchFilter) { m_searchFilter = searchFilter; }
     bool IsConfirmed() const { return m_bConfirmed; }
     bool IsCanceled() const { return m_bCanceled; }
-    void OnSearch();
 
   protected:
-    virtual void OnInitWindow();
+    void OnInitWindow() override;
 
+  private:
+    void OnSearch();
     void UpdateChannelSpin(void);
     void UpdateGroupsSpin(void);
     void UpdateGenreSpin(void);
     void UpdateDurationSpin(void);
-    void ReadDateTime(const CStdString &strDate, const CStdString &strTime, CDateTime &dateTime) const;
+    CDateTime ReadDateTime(const std::string &strDate, const std::string &strTime) const;
     void Update();
+
+    bool IsRadioSelected(int controlID);
+    int  GetSpinValue(int controlID);
+    std::string GetEditValue(int controlID);
 
     bool m_bConfirmed;
     bool m_bCanceled;
-    EPG::EpgSearchFilter *m_searchFilter;
+    CPVREpgSearchFilter *m_searchFilter;
   };
 }

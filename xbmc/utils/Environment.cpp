@@ -21,8 +21,8 @@
 /**
  * \file utils\Environment.cpp
  * \brief Implements CEnvironment class functions.
- *  
- *  Some ideas were inspired by PostgreSQL's pgwin32_putenv function. 
+ *
+ *  Some ideas were inspired by PostgreSQL's pgwin32_putenv function.
  *  Refined, updated, enhanced and modified for XBMC by Karlson2k.
  */
 
@@ -30,14 +30,13 @@
 #include <stdlib.h>
 #ifdef TARGET_WINDOWS
 #include <Windows.h>
-#include "utils\SystemInfo.h"
 #endif
 
 // --------------------- Helper Functions ---------------------
 
 #ifdef TARGET_WINDOWS
 
-std::wstring CEnvironment::win32ConvertUtf8ToW(const std::string &text, bool *resultSuccessful /* = NULL*/)  
+std::wstring CEnvironment::win32ConvertUtf8ToW(const std::string &text, bool *resultSuccessful /* = NULL*/)
 {
   if (text.empty())
   {
@@ -66,7 +65,7 @@ std::wstring CEnvironment::win32ConvertUtf8ToW(const std::string &text, bool *re
   return Wret;
 }
 
-std::string CEnvironment::win32ConvertWToUtf8(const std::wstring &text, bool *resultSuccessful /*= NULL*/)  
+std::string CEnvironment::win32ConvertWToUtf8(const std::wstring &text, bool *resultSuccessful /*= NULL*/)
 {
   if (text.empty())
   {
@@ -77,13 +76,11 @@ std::string CEnvironment::win32ConvertWToUtf8(const std::wstring &text, bool *re
   if (resultSuccessful != NULL)
     *resultSuccessful = false;
 
-  static const DWORD convFlags = (CSysInfo::IsWindowsVersionAtLeast(CSysInfo::WindowsVersionVista)) ?
-    /*WC_ERR_INVALID_CHARS*/ 0x80 : 0;
-  int bufSize = WideCharToMultiByte(CP_UTF8,  convFlags, text.c_str(), -1, NULL, 0, NULL, NULL);
+  int bufSize = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.c_str(), -1, NULL, 0, NULL, NULL);
   if (bufSize == 0)
     return "";
   char * converted = new char[bufSize];
-  if (WideCharToMultiByte(CP_UTF8, convFlags, text.c_str(), -1, converted, bufSize, NULL, NULL) != bufSize)
+  if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.c_str(), -1, converted, bufSize, NULL, NULL) != bufSize)
   {
     delete[] converted;
     return "";
@@ -91,7 +88,7 @@ std::string CEnvironment::win32ConvertWToUtf8(const std::wstring &text, bool *re
 
   std::string ret(converted);
   delete[] converted;
-  
+
   if (resultSuccessful != NULL)
     *resultSuccessful = true;
   return ret;
@@ -105,7 +102,7 @@ typedef int (_cdecl * wputenvPtr) (const wchar_t *envstring);
  * \fn int CEnvironment::win32_setenv(const std::wstring &name, const std::wstring &value = L"",
  *     updateAction action = autoDetect)
  * \brief Internal function used to manipulate with environment variables on win32.
- * 		  
+ *
  * This function make all dirty work with setting, deleting and modifying environment variables.
  *
  * \param name   The environment variable name.
@@ -154,9 +151,19 @@ int CEnvironment::win32_setenv(const std::string &name, const std::string &value
 #ifdef _DEBUG
     { L"msvcr110d.dll" },// Visual Studio 2012 (debug)
 #endif
+    { L"msvcr120.dll" }, // Visual Studio 2013
+#ifdef _DEBUG
+    { L"msvcr120d.dll" },// Visual Studio 2013 (debug)
+#endif
+    { L"vcruntime140.dll" },
+    { L"ucrtbase.dll" },
+#ifdef _DEBUG
+    { L"vcruntime140d.dll" },
+    { L"ucrtbased.dll" },
+#endif
     { NULL }             // Terminating NULL for list
   };
-  
+
   // Check all modules each function run, because modules can be loaded/unloaded at runtime
   for (int i = 0; modulesList[i]; i++)
   {
@@ -175,10 +182,10 @@ int CEnvironment::win32_setenv(const std::string &name, const std::string &value
     retValue += SetEnvironmentVariableW(Wname.c_str(), NULL) ? 0 : 4; // 4 if failed
   else
     retValue += SetEnvironmentVariableW(Wname.c_str(), Wvalue.c_str()) ? 0 : 4; // 4 if failed
-  
+
   // Finally update our runtime Environment
   retValue += (::_wputenv(EnvString.c_str()) == 0) ? 0 : 8; // 8 if failed
-  
+
   return retValue;
 }
 #endif
@@ -207,7 +214,7 @@ std::string CEnvironment::getenv(const std::string &name)
   if (wStr != NULL)
     return win32ConvertWToUtf8(wStr);
 
-  // Not found in Environment of runtime library 
+  // Not found in Environment of runtime library
   // Try Environment of process as fallback
   unsigned int varSize = GetEnvironmentVariableW(Wname.c_str(), NULL, 0);
   if (varSize == 0)

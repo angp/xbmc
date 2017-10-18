@@ -27,9 +27,9 @@ namespace XFILE
   {
     public:
       CFTPDirectory(void);
-      virtual ~CFTPDirectory(void);
-      virtual bool GetDirectory(const CStdString& strPath, CFileItemList &items);
-      virtual bool Exists(const char* strPath);
+      ~CFTPDirectory(void) override;
+      bool GetDirectory(const CURL& url, CFileItemList &items) override;
+      bool Exists(const CURL& url) override;
     private:
   };
 }

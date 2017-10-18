@@ -1,6 +1,6 @@
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      Copyright (C) 2005-2015 Team Kodi
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
+ *  along with Kodi; see the file COPYING.  If not, see
  *  <http://www.gnu.org/licenses/>.
  *
  */
@@ -22,15 +22,13 @@
 #include "settings/AdvancedSettings.h"
 #include "guilib/LocalizeStrings.h"
 #include "utils/log.h"
+#include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "PosixMountProvider.h"
 
-CUDiskDevice::CUDiskDevice(const char *DeviceKitUDI)
+CUDiskDevice::CUDiskDevice(const char *DeviceKitUDI):
+  m_DeviceKitUDI(DeviceKitUDI)
 {
-  m_DeviceKitUDI = DeviceKitUDI;
-  m_UDI = "";
-  m_MountPath = "";
-  m_FileSystem = "";
   m_isMounted = false;
   m_isMountedByUs = false;
   m_isRemovable = false;
@@ -38,7 +36,7 @@ CUDiskDevice::CUDiskDevice(const char *DeviceKitUDI)
   m_isFileSystem = false;
   m_isSystemInternal = false;
   m_isOptical = false;
-  m_PartitionSizeGiB = 0.0f;
+  m_PartitionSize = 0;
   Update();
 }
 
@@ -46,7 +44,7 @@ void CUDiskDevice::Update()
 {
   CVariant properties = CDBusUtil::GetAll("org.freedesktop.UDisks", m_DeviceKitUDI.c_str(), "org.freedesktop.UDisks.Device");
 
-  m_isFileSystem = CStdString(properties["IdUsage"].asString()) == "filesystem";
+  m_isFileSystem = properties["IdUsage"].asString() == "filesystem";
   if (m_isFileSystem)
   {
     m_UDI         = properties["IdUuid"].asString();
@@ -61,12 +59,12 @@ void CUDiskDevice::Update()
   }
 
   m_isMounted   = properties["DeviceIsMounted"].asBoolean();
-  if (m_isMounted && properties["DeviceMountPaths"].size() > 0)
+  if (m_isMounted && !properties["DeviceMountPaths"].empty())
     m_MountPath   = properties["DeviceMountPaths"][0].asString();
   else
     m_MountPath.clear();
 
-  m_PartitionSizeGiB = properties["PartitionSize"].asUnsignedInteger() / 1024.0 / 1024.0 / 1024.0;
+  m_PartitionSize = properties["PartitionSize"].asUnsignedInteger();
   m_isPartition = properties["DeviceIsPartition"].asBoolean();
   m_isSystemInternal = properties["DeviceIsSystemInternal"].asBoolean();
   m_isOptical = properties["DeviceIsOpticalDisc"].asBoolean();
@@ -100,7 +98,7 @@ bool CUDiskDevice::Mount()
       if (dbus_message_get_args (reply, NULL, DBUS_TYPE_STRING, &mountPoint, DBUS_TYPE_INVALID))
       {
         m_MountPath = mountPoint;
-        CLog::Log(LOGDEBUG, "UDisks: Sucessfully mounted %s on %s", m_DeviceKitUDI.c_str(), mountPoint);
+        CLog::Log(LOGDEBUG, "UDisks: Successfully mounted %s on %s", m_DeviceKitUDI.c_str(), mountPoint);
         m_isMountedByUs = m_isMounted = true;
       }
     }
@@ -139,7 +137,10 @@ CMediaSource CUDiskDevice::ToMediaShare()
   CMediaSource source;
   source.strPath = m_MountPath;
   if (m_Label.empty())
-    source.strName.Format("%.1f GB %s", m_PartitionSizeGiB, g_localizeStrings.Get(155).c_str());
+  {
+    std::string strSize = StringUtils::SizeToString(m_PartitionSize);
+    source.strName = StringUtils::Format("%s %s", strSize.c_str(), g_localizeStrings.Get(155).c_str());
+  }
   else
     source.strName = m_Label;
   if (m_isOptical)
@@ -154,46 +155,41 @@ CMediaSource CUDiskDevice::ToMediaShare()
 
 bool CUDiskDevice::IsApproved()
 {
-  return (m_isFileSystem && m_isMounted && m_UDI.length() > 0 && (m_FileSystem.length() > 0 && !m_FileSystem.Equals("swap")) 
-      && !m_MountPath.Equals("/") && !m_MountPath.Equals("/boot")) || m_isOptical;
+  return (m_isFileSystem && m_isMounted && m_UDI.length() > 0 && (m_FileSystem.length() > 0 && m_FileSystem != "swap") 
+      && m_MountPath != "/" && m_MountPath != "/boot") || m_isOptical;
 }
 
 #define BOOL2SZ(b) ((b) ? "true" : "false")
 
-CStdString CUDiskDevice::toString()
+std::string CUDiskDevice::toString()
 {
-  CStdString str;
-  str.Format("DeviceUDI %s: IsFileSystem %s HasFileSystem %s "
+  return StringUtils::Format("DeviceUDI %s: IsFileSystem %s HasFileSystem %s "
       "IsSystemInternal %s IsMounted %s IsRemovable %s IsPartition %s "
       "IsOptical %s",
-      m_DeviceKitUDI.c_str(), BOOL2SZ(m_isFileSystem), m_FileSystem,
+      m_DeviceKitUDI.c_str(), BOOL2SZ(m_isFileSystem), m_FileSystem.c_str(),
       BOOL2SZ(m_isSystemInternal), BOOL2SZ(m_isMounted),
       BOOL2SZ(m_isRemovable), BOOL2SZ(m_isPartition), BOOL2SZ(m_isOptical));
-
-  return str;
 }
 
 CUDisksProvider::CUDisksProvider()
 {
-  dbus_error_init (&m_error);
-  // TODO: do not use dbus_connection_pop_message() that requires the use of a
-  // private connection
-  m_connection = dbus_bus_get_private(DBUS_BUS_SYSTEM, &m_error);
-
-  if (m_connection)
+  //! @todo do not use dbus_connection_pop_message() that requires the use of a
+  //! private connection
+  if (!m_connection.Connect(DBUS_BUS_SYSTEM, true))
   {
-    dbus_connection_set_exit_on_disconnect(m_connection, false);
-
-    dbus_bus_add_match(m_connection, "type='signal',interface='org.freedesktop.UDisks'", &m_error);
-    dbus_connection_flush(m_connection);
+    return;
   }
+  
+  dbus_connection_set_exit_on_disconnect(m_connection, false);
 
-  if (dbus_error_is_set(&m_error))
+  CDBusError error;
+  dbus_bus_add_match(m_connection, "type='signal',interface='org.freedesktop.UDisks'", error);
+  dbus_connection_flush(m_connection);
+
+  if (error)
   {
-    CLog::Log(LOGERROR, "UDisks: Failed to attach to signal %s", m_error.message);
-    dbus_connection_close(m_connection);
-    dbus_connection_unref(m_connection);
-    m_connection = NULL;
+    error.Log("UDisks: Failed to attach to signal");
+    m_connection.Destroy();
   }
 }
 
@@ -205,15 +201,6 @@ CUDisksProvider::~CUDisksProvider()
     delete m_AvailableDevices[itr->first];
 
   m_AvailableDevices.clear();
-
-  if (m_connection)
-  {
-    dbus_connection_close(m_connection);
-    dbus_connection_unref(m_connection);
-    m_connection = NULL;
-  }
-
-  dbus_error_free (&m_error);
 }
 
 void CUDisksProvider::Initialize()
@@ -223,28 +210,28 @@ void CUDisksProvider::Initialize()
   CLog::Log(LOGDEBUG, "UDisks: DaemonVersion %i", m_DaemonVersion);
 
   CLog::Log(LOGDEBUG, "UDisks: Querying available devices");
-  std::vector<CStdString> devices = EnumerateDisks();
+  std::vector<std::string> devices = EnumerateDisks();
   for (unsigned int i = 0; i < devices.size(); i++)
     DeviceAdded(devices[i].c_str(), NULL);
 }
 
-bool CUDisksProvider::Eject(CStdString mountpath)
+bool CUDisksProvider::Eject(const std::string& mountpath)
 {
   DeviceMap::iterator itr;
-  CStdString path(mountpath);
+  std::string path(mountpath);
   URIUtils::RemoveSlashAtEnd(path);
 
   for (itr = m_AvailableDevices.begin(); itr != m_AvailableDevices.end(); ++itr)
   {
     CUDiskDevice *device = itr->second;
-    if (device->m_MountPath.Equals(path))
+    if (device->m_MountPath == path)
       return device->UnMount();
   }
 
   return false;
 }
 
-std::vector<CStdString> CUDisksProvider::GetDiskUsage()
+std::vector<std::string> CUDisksProvider::GetDiskUsage()
 {
   CPosixMountProvider legacy;
   return legacy.GetDiskUsage();
@@ -256,22 +243,21 @@ bool CUDisksProvider::PumpDriveChangeEvents(IStorageEventsCallback *callback)
   if (m_connection)
   {
     dbus_connection_read_write(m_connection, 0);
-    DBusMessage *msg = dbus_connection_pop_message(m_connection);
+    DBusMessagePtr msg(dbus_connection_pop_message(m_connection));
 
     if (msg)
     {
       char *object;
-      if (dbus_message_get_args (msg, NULL, DBUS_TYPE_OBJECT_PATH, &object, DBUS_TYPE_INVALID))
+      if (dbus_message_get_args (msg.get(), NULL, DBUS_TYPE_OBJECT_PATH, &object, DBUS_TYPE_INVALID))
       {
         result = true;
-        if (dbus_message_is_signal(msg, "org.freedesktop.UDisks", "DeviceAdded"))
+        if (dbus_message_is_signal(msg.get(), "org.freedesktop.UDisks", "DeviceAdded"))
           DeviceAdded(object, callback);
-        else if (dbus_message_is_signal(msg, "org.freedesktop.UDisks", "DeviceRemoved"))
+        else if (dbus_message_is_signal(msg.get(), "org.freedesktop.UDisks", "DeviceRemoved"))
           DeviceRemoved(object, callback);
-        else if (dbus_message_is_signal(msg, "org.freedesktop.UDisks", "DeviceChanged"))
+        else if (dbus_message_is_signal(msg.get(), "org.freedesktop.UDisks", "DeviceChanged"))
           DeviceChanged(object, callback);
       }
-      dbus_message_unref(msg);
     }
   }
   return result;
@@ -279,31 +265,12 @@ bool CUDisksProvider::PumpDriveChangeEvents(IStorageEventsCallback *callback)
 
 bool CUDisksProvider::HasUDisks()
 {
-  bool hasUDisks = false;
-  CDBusMessage message("org.freedesktop.UDisks", "/org/freedesktop/UDisks", "org.freedesktop.UDisks", "EnumerateDevices");
-
-  DBusError error;
-  dbus_error_init (&error);
-  DBusConnection *con = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
-
-  if (con)
-    message.Send(con, &error);
-
-  if (!dbus_error_is_set(&error))
-    hasUDisks = true;
-  else
-    CLog::Log(LOGDEBUG, "UDisks: %s - %s", error.name, error.message);
-
-  dbus_error_free (&error);
-  if (con)
-    dbus_connection_unref(con);
-
-  return hasUDisks;
+  return CDBusUtil::TryMethodCall(DBUS_BUS_SYSTEM, "org.freedesktop.UDisks", "/org/freedesktop/UDisks", "org.freedesktop.UDisks", "EnumerateDevices");
 }
 
 void CUDisksProvider::DeviceAdded(const char *object, IStorageEventsCallback *callback)
 {
-  CLog::Log(LOGDEBUG|LOGDBUS, "UDisks: DeviceAdded (%s)", object);
+  CLog::Log(LOGDEBUG, LOGDBUS, "UDisks: DeviceAdded (%s)", object);
 
   if (m_AvailableDevices[object])
   {
@@ -318,7 +285,7 @@ void CUDisksProvider::DeviceAdded(const char *object, IStorageEventsCallback *ca
   if (g_advancedSettings.m_handleMounting)
     device->Mount();
 
-  CLog::Log(LOGDEBUG|LOGDBUS, "UDisks: DeviceAdded - %s", device->toString().c_str());
+  CLog::Log(LOGDEBUG, LOGDBUS, "UDisks: DeviceAdded - %s", device->toString().c_str());
 
   if (device->m_isMounted && device->IsApproved())
   {
@@ -330,7 +297,7 @@ void CUDisksProvider::DeviceAdded(const char *object, IStorageEventsCallback *ca
 
 void CUDisksProvider::DeviceRemoved(const char *object, IStorageEventsCallback *callback)
 {
-  CLog::Log(LOGDEBUG|LOGDBUS, "UDisks: DeviceRemoved (%s)", object);
+  CLog::Log(LOGDEBUG, LOGDBUS, "UDisks: DeviceRemoved (%s)", object);
 
   CUDiskDevice *device = m_AvailableDevices[object];
   if (device)
@@ -345,7 +312,7 @@ void CUDisksProvider::DeviceRemoved(const char *object, IStorageEventsCallback *
 
 void CUDisksProvider::DeviceChanged(const char *object, IStorageEventsCallback *callback)
 {
-  CLog::Log(LOGDEBUG|LOGDBUS, "UDisks: DeviceChanged (%s)", object);
+  CLog::Log(LOGDEBUG, LOGDBUS, "UDisks: DeviceChanged (%s)", object);
 
   CUDiskDevice *device = m_AvailableDevices[object];
   if (device == NULL)
@@ -367,13 +334,13 @@ void CUDisksProvider::DeviceChanged(const char *object, IStorageEventsCallback *
     else if (mounted && !device->m_isMounted && callback)
       callback->OnStorageSafelyRemoved(device->m_Label);
 
-    CLog::Log(LOGDEBUG|LOGDBUS, "UDisks: DeviceChanged - %s", device->toString().c_str());
+    CLog::Log(LOGDEBUG, LOGDBUS, "UDisks: DeviceChanged - %s", device->toString().c_str());
   }
 }
 
-std::vector<CStdString> CUDisksProvider::EnumerateDisks()
+std::vector<std::string> CUDisksProvider::EnumerateDisks()
 {
-  std::vector<CStdString> devices;
+  std::vector<std::string> devices;
   CDBusMessage message("org.freedesktop.UDisks", "/org/freedesktop/UDisks", "org.freedesktop.UDisks", "EnumerateDevices");
   DBusMessage *reply = message.SendSystem();
   if (reply)

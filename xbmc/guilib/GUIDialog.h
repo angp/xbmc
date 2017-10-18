@@ -28,6 +28,13 @@
 #include "GUIWindow.h"
 #include "WindowIDs.h"
 
+enum class DialogModalityType
+{
+  MODELESS,
+  MODAL,
+  PARENTLESS_MODAL
+};
+
 /*!
  \ingroup winmsg
  \brief
@@ -36,43 +43,48 @@ class CGUIDialog :
       public CGUIWindow
 {
 public:
-  CGUIDialog(int id, const CStdString &xmlFile);
-  virtual ~CGUIDialog(void);
+  CGUIDialog(int id, const std::string &xmlFile, DialogModalityType modalityType = DialogModalityType::MODAL);
+  ~CGUIDialog(void) override;
 
-  virtual bool OnAction(const CAction &action);
-  virtual bool OnMessage(CGUIMessage& message);
-  virtual void DoProcess(unsigned int currentTime, CDirtyRegionList &dirtyregions);
-  virtual void Render();
+  bool OnAction(const CAction &action) override;
+  bool OnMessage(CGUIMessage& message) override;
+  void DoProcess(unsigned int currentTime, CDirtyRegionList &dirtyregions) override;
+  void Render() override;
 
-  void DoModal(int iWindowID = WINDOW_INVALID, const CStdString &param = ""); // modal
-  void Show(); // modeless
+  void Open(const std::string &param = "");
   
-  virtual bool OnBack(int actionID);
+  bool OnBack(int actionID) override;
 
-  virtual bool IsDialogRunning() const { return m_active; };
-  virtual bool IsDialog() const { return true;};
-  virtual bool IsModalDialog() const { return m_bModal; };
+  bool IsDialogRunning() const override { return m_active; };
+  bool IsDialog() const override { return true;};
+  bool IsModalDialog() const override { return m_modalityType == DialogModalityType::MODAL || m_modalityType == DialogModalityType::PARENTLESS_MODAL; };
+  virtual DialogModalityType GetModalityType() const { return m_modalityType; };
 
   void SetAutoClose(unsigned int timeoutMs);
   void ResetAutoClose(void);
+  void CancelAutoClose(void);
   bool IsAutoClosed(void) const { return m_bAutoClosed; };
   void SetSound(bool OnOff) { m_enableSound = OnOff; };
-  virtual bool IsSoundEnabled() const { return m_enableSound; };
+  bool IsSoundEnabled() const override { return m_enableSound; };
 
 protected:
-  virtual void SetDefaults();
-  virtual void OnWindowLoaded();
+  bool Load(TiXmlElement *pRootElement) override;
+  void SetDefaults() override;
+  void OnWindowLoaded() override;
+  using CGUIWindow::UpdateVisibility;
   virtual void UpdateVisibility();
 
-  virtual void DoModal_Internal(int iWindowID = WINDOW_INVALID, const CStdString &param = ""); // modal
-  virtual void Show_Internal(); // modeless
-  virtual void OnDeinitWindow(int nextWindowID);
+  virtual void Open_Internal(const std::string &param = "");
+  virtual void Open_Internal(bool bProcessRenderLoop, const std::string &param = "");
+  void OnDeinitWindow(int nextWindowID) override;
+
+  void ProcessRenderLoop(bool renderOnly = false);
 
   bool m_wasRunning; ///< \brief true if we were running during the last DoProcess()
-  bool m_bModal;
   bool m_autoClosing;
   bool m_enableSound;
   unsigned int m_showStartTime;
   unsigned int m_showDuration;
   bool m_bAutoClosed;
+  DialogModalityType m_modalityType;
 };

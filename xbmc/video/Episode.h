@@ -18,6 +18,10 @@
  *  <http://www.gnu.org/licenses/>.
  *
  */
+
+#include <string>
+#include <vector>
+
 #include "utils/ScraperUrl.h"
 #include "XBDateTime.h"
 
@@ -41,7 +45,7 @@ namespace VIDEO
       iSubepisode = Subepisode;
       isFolder    = Folder;
     }
-    bool operator==(const struct EPISODE& rhs)
+    bool operator==(const struct EPISODE& rhs) const
     {
       return (iSeason     == rhs.iSeason  &&
               iEpisode    == rhs.iEpisode &&

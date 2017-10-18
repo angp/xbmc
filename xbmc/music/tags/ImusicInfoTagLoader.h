@@ -19,7 +19,7 @@
  *
  */
 
-#include "utils/StdString.h"
+#include <string>
 
 namespace MUSIC_INFO
 {
@@ -28,9 +28,9 @@ namespace MUSIC_INFO
   class IMusicInfoTagLoader
   {
   public:
-    IMusicInfoTagLoader(void){};
-    virtual ~IMusicInfoTagLoader(){};
+    IMusicInfoTagLoader(void) = default;
+    virtual ~IMusicInfoTagLoader() = default;
 
-    virtual bool Load(const CStdString& strFileName, CMusicInfoTag& tag, EmbeddedArt *art = NULL) = 0;
+    virtual bool Load(const std::string& strFileName, CMusicInfoTag& tag, EmbeddedArt *art = NULL) = 0;
   };
 }

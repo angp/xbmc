@@ -19,23 +19,21 @@
  *
  */
 
-#include "IHTTPRequestHandler.h"
+#include <string>
 
-#include "utils/StdString.h"
+#include "network/httprequesthandler/HTTPFileHandler.h"
 
-class CHTTPVfsHandler : public IHTTPRequestHandler
+class CHTTPVfsHandler : public CHTTPFileHandler
 {
 public:
-  CHTTPVfsHandler() { };
+  CHTTPVfsHandler() = default;
+  ~CHTTPVfsHandler() override = default;
   
-  virtual IHTTPRequestHandler* GetInstance() { return new CHTTPVfsHandler(); }
-  virtual bool CheckHTTPRequest(const HTTPRequest &request);
-  virtual int HandleHTTPRequest(const HTTPRequest &request);
+  IHTTPRequestHandler* Create(const HTTPRequest &request) const override { return new CHTTPVfsHandler(request); }
+  bool CanHandleRequest(const HTTPRequest &request) const override;
 
-  virtual std::string GetHTTPResponseFile() const { return m_path; }
+  int GetPriority() const override { return 5; }
 
-  virtual int GetPriority() const { return 2; }
-
-private:
-  CStdString m_path;
+protected:
+  explicit CHTTPVfsHandler(const HTTPRequest &request);
 };

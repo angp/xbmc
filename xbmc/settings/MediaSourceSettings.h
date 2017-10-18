@@ -22,19 +22,19 @@
 #include <string>
 
 #include "MediaSource.h"
-#include "settings/ISettingsHandler.h"
+#include "settings/lib/ISettingsHandler.h"
 
 class TiXmlNode;
 
 class CMediaSourceSettings : public ISettingsHandler
 {
 public:
-  static CMediaSourceSettings& Get();
+  static CMediaSourceSettings& GetInstance();
 
   static std::string GetSourcesFile();
   
-  virtual void OnSettingsLoaded();
-  virtual void OnSettingsUnloaded();
+  void OnSettingsLoaded() override;
+  void OnSettingsUnloaded() override;
 
   bool Load();
   bool Load(const std::string &file);
@@ -53,9 +53,9 @@ public:
 
 protected:
   CMediaSourceSettings();
-  CMediaSourceSettings(const CMediaSourceSettings&);
-  CMediaSourceSettings& operator=(CMediaSourceSettings const&);
-  virtual ~CMediaSourceSettings();
+  CMediaSourceSettings(const CMediaSourceSettings&) = delete;
+  CMediaSourceSettings& operator=(CMediaSourceSettings const&) = delete;
+  ~CMediaSourceSettings() override;
 
 private:
   bool GetSource(const std::string &category, const TiXmlNode *source, CMediaSource &share);
@@ -67,6 +67,7 @@ private:
   VECSOURCES m_fileSources;
   VECSOURCES m_musicSources;
   VECSOURCES m_videoSources;
+  VECSOURCES m_gameSources;
 
   std::string m_defaultProgramSource;
   std::string m_defaultMusicSource;

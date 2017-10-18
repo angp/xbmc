@@ -18,24 +18,22 @@
  *
  */
 
-#if (defined HAVE_CONFIG_H) && (!defined TARGET_WINDOWS)
-  #include "config.h"
-#endif
-
 // python.h should always be included first before any other includes
 #include <Python.h>
+#include <iterator>
 #include <osdefs.h>
 
 #include "system.h"
 #include "PythonInvoker.h"
 #include "Application.h"
-#include "ApplicationMessenger.h"
+#include "messaging/ApplicationMessenger.h"
 #include "addons/AddonManager.h"
 #include "dialogs/GUIDialogKaiToast.h"
 #include "filesystem/File.h"
 #include "filesystem/SpecialProtocol.h"
 #include "guilib/GraphicContext.h"
 #include "guilib/GUIWindowManager.h"
+#include "guilib/LocalizeStrings.h"
 #include "interfaces/legacy/Addon.h"
 #include "interfaces/python/LanguageHook.h"
 #include "interfaces/python/PyContext.h"
@@ -47,7 +45,11 @@
 #include "utils/CharsetConverter.h"
 #endif // defined(TARGET_WINDOWS)
 #include "utils/log.h"
+#include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
+#ifdef TARGET_POSIX
+#include "linux/XTimeUtils.h"
+#endif
 
 #ifdef TARGET_WINDOWS
 extern "C" FILE *fopen_utf8(const char *_Filename, const char *_Mode);
@@ -64,8 +66,8 @@ extern "C" FILE *fopen_utf8(const char *_Filename, const char *_Mode);
 // Time before ill-behaved scripts are terminated
 #define PYTHON_SCRIPT_TIMEOUT 5000 // ms
 
-using namespace std;
 using namespace XFILE;
+using namespace KODI::MESSAGING;
 
 extern "C"
 {
@@ -73,10 +75,14 @@ extern "C"
   char* dll_getenv(const char* szKey);
 }
 
-static const CStdString getListOfAddonClassesAsString(XBMCAddon::AddonClass::Ref<XBMCAddon::Python::LanguageHook>& languageHook)
+#define PythonModulesSize sizeof(PythonModules) / sizeof(PythonModule)
+
+CCriticalSection CPythonInvoker::s_critical;
+
+static const std::string getListOfAddonClassesAsString(XBMCAddon::AddonClass::Ref<XBMCAddon::Python::PythonLanguageHook>& languageHook)
 {
-  CStdString message;
-  XBMCAddon::AddonClass::Synchronize l(*(languageHook.get()));
+  std::string message;
+  CSingleLock l(*(languageHook.get()));
   std::set<XBMCAddon::AddonClass*>& acs = languageHook->GetRegisteredAddonClasses();
   bool firstTime = true;
   for (std::set<XBMCAddon::AddonClass*>::iterator iter = acs.begin(); iter != acs.end(); ++iter)
@@ -85,15 +91,34 @@ static const CStdString getListOfAddonClassesAsString(XBMCAddon::AddonClass::Ref
       message += ",";
     else
       firstTime = false;
-    message += (*iter)->GetClassname().c_str();
+    message += (*iter)->GetClassname();
   }
 
   return message;
 }
 
+static std::vector<std::vector<char>> storeArgumentsCCompatible(std::vector<std::string> const & input)
+{
+  std::vector<std::vector<char>> output;
+  std::transform(input.begin(), input.end(), std::back_inserter(output),
+                [](std::string const & i) { return std::vector<char>(i.c_str(), i.c_str() + i.length() + 1); });
+
+  if (output.empty())
+    output.push_back(std::vector<char>(1u, '\0'));
+
+  return output;
+}
+
+static std::vector<char *> getCPointersToArguments(std::vector<std::vector<char>> & input)
+{
+  std::vector<char *> output;
+  std::transform(input.begin(), input.end(), std::back_inserter(output), 
+                [](std::vector<char> & i) { return &i[0]; });
+  return output;
+}
+
 CPythonInvoker::CPythonInvoker(ILanguageInvocationHandler *invocationHandler)
   : ILanguageInvoker(invocationHandler),
-    m_source(NULL), m_argc(0), m_argv(NULL),
     m_threadState(NULL), m_stop(false)
 { }
 
@@ -106,18 +131,11 @@ CPythonInvoker::~CPythonInvoker()
 
   if (GetState() < InvokerStateDone)
     CLog::Log(LOGDEBUG, "CPythonInvoker(%d): waiting for python thread \"%s\" to stop",
-      GetId(), (m_source != NULL ? m_source : "unknown script"));
+      GetId(), (!m_sourceFile.empty() ? m_sourceFile.c_str() : "unknown script"));
   Stop(true);
-  g_pythonParser.PulseGlobalEvent();
+  pulseGlobalEvent();
 
-  delete [] m_source;
-  if (m_argv != NULL)
-  {
-    for (unsigned int i = 0; i < m_argc; i++)
-      delete [] m_argv[i];
-    delete [] m_argv;
-  }
-  g_pythonParser.FinalizeScript();
+  onExecutionFinalized();
 }
 
 bool CPythonInvoker::Execute(const std::string &script, const std::vector<std::string> &arguments /* = std::vector<std::string>() */)
@@ -131,7 +149,7 @@ bool CPythonInvoker::Execute(const std::string &script, const std::vector<std::s
     return false;
   }
 
-  if (!g_pythonParser.InitializeEngine())
+  if (!onExecutionInitialized())
     return false;
 
   return ILanguageInvoker::Execute(script, arguments);
@@ -140,27 +158,14 @@ bool CPythonInvoker::Execute(const std::string &script, const std::vector<std::s
 bool CPythonInvoker::execute(const std::string &script, const std::vector<std::string> &arguments)
 {
   // copy the code/script into a local string buffer
-#ifdef TARGET_WINDOWS
-  CStdString strsrc = script;
-  g_charsetConverter.utf8ToSystem(strsrc);
-  m_source = new char[strsrc.length() + 1];
-  strcpy(m_source, strsrc);
-#else
-  m_source = new char[script.length() + 1];
-  strcpy(m_source, script.c_str());
-#endif
+  m_sourceFile = script;
 
   // copy the arguments into a local buffer
-  m_argc = arguments.size();
-  m_argv = new char*[m_argc];
-  for (unsigned int i = 0; i < m_argc; i++)
-  {
-    m_argv[i] = new char[arguments.at(i).length() + 1];
-    strcpy(m_argv[i], arguments.at(i).c_str());
-  }
+  unsigned int argc = arguments.size();
+  std::vector<std::vector<char>> argvStorage = storeArgumentsCCompatible(arguments);
+  std::vector<char *> argv = getCPointersToArguments(argvStorage);
 
-  CLog::Log(LOGDEBUG, "CPythonInvoker(%d, %s): start processing", GetId(), m_source);
-  int m_Py_file_input = Py_file_input;
+  CLog::Log(LOGDEBUG, "CPythonInvoker(%d, %s): start processing", GetId(), m_sourceFile.c_str());
 
   // get the global lock
   PyEval_AcquireLock();
@@ -168,32 +173,49 @@ bool CPythonInvoker::execute(const std::string &script, const std::vector<std::s
   if (state == NULL)
   {
     PyEval_ReleaseLock();
-    CLog::Log(LOGERROR, "CPythonInvoker(%d, %s): FAILED to get thread state!", GetId(), m_source);
+    CLog::Log(LOGERROR, "CPythonInvoker(%d, %s): FAILED to get thread state!", GetId(), m_sourceFile.c_str());
     return false;
   }
   // swap in my thread state
   PyThreadState_Swap(state);
 
-  XBMCAddon::AddonClass::Ref<XBMCAddon::Python::LanguageHook> languageHook(new XBMCAddon::Python::LanguageHook(state->interp));
+  XBMCAddon::AddonClass::Ref<XBMCAddon::Python::PythonLanguageHook> languageHook(new XBMCAddon::Python::PythonLanguageHook(state->interp));
   languageHook->RegisterMe();
 
-  g_pythonParser.InitializeInterpreter(m_addon);
+  onInitialization();
   setState(InvokerStateInitialized);
 
-  CLog::Log(LOGDEBUG, "CPythonInvoker(%d, %s): the source file to load is %s", GetId(), m_source, m_source);
+  std::string realFilename(CSpecialProtocol::TranslatePath(m_sourceFile));
+  if (realFilename == m_sourceFile)
+    CLog::Log(LOGDEBUG, "CPythonInvoker(%d, %s): the source file to load is \"%s\"", GetId(), m_sourceFile.c_str(), m_sourceFile.c_str());
+  else
+    CLog::Log(LOGDEBUG, "CPythonInvoker(%d, %s): the source file to load is \"%s\" (\"%s\")", GetId(), m_sourceFile.c_str(), m_sourceFile.c_str(), realFilename.c_str());
 
   // get path from script file name and add python path's
   // this is used for python so it will search modules from script path first
-  CStdString scriptDir;
-  URIUtils::GetDirectory(CSpecialProtocol::TranslatePath(m_source), scriptDir);
+  std::string scriptDir = URIUtils::GetDirectory(realFilename);
   URIUtils::RemoveSlashAtEnd(scriptDir);
   addPath(scriptDir);
 
-  // add on any addon modules the user has installed
-  ADDON::VECADDONS addons;
-  ADDON::CAddonMgr::Get().GetAddons(ADDON::ADDON_SCRIPT_MODULE, addons);
-  for (unsigned int i = 0; i < addons.size(); ++i)
-    addPath(CSpecialProtocol::TranslatePath(addons[i]->LibPath()));
+  // add all addon module dependencies to path
+  if (m_addon)
+  {
+    std::set<std::string> paths;
+    getAddonModuleDeps(m_addon, paths);
+    for (std::set<std::string>::const_iterator it = paths.begin(); it != paths.end(); ++it)
+      addPath(*it);
+  }
+  else
+  { // for backwards compatibility.
+    // we don't have any addon so just add all addon modules installed
+    CLog::Log(LOGWARNING, "CPythonInvoker(%d): Script invoked without an addon. Adding all addon "
+        "modules installed to python path as fallback. This behaviour will be removed in future "
+        "version.", GetId());
+    ADDON::VECADDONS addons;
+    CServiceBroker::GetAddonMgr().GetAddons(addons, ADDON::ADDON_SCRIPT_MODULE);
+    for (unsigned int i = 0; i < addons.size(); ++i)
+      addPath(CSpecialProtocol::TranslatePath(addons[i]->LibPath()));
+  }
 
   // we want to use sys.path so it includes site-packages
   // if this fails, default to using Py_GetPath
@@ -207,22 +229,27 @@ bool CPythonInvoker::execute(const std::string &script, const std::vector<std::s
     {
       PyObject *e = PyList_GetItem(pathObj, i); // borrowed ref, no need to delete
       if (e != NULL && PyString_Check(e))
-        addPath(PyString_AsString(e)); // returns internal data, don't delete or modify
+        addNativePath(PyString_AsString(e)); // returns internal data, don't delete or modify
     }
   }
   else
-    addPath(Py_GetPath());
+    addNativePath(Py_GetPath());
 
   Py_DECREF(sysMod); // release ref to sysMod
 
   // set current directory and python's path.
-  if (m_argv != NULL)
-    PySys_SetArgv(m_argc, m_argv);
+  PySys_SetArgv(argc, &argv[0]);
 
-  CLog::Log(LOGDEBUG, "CPythonInvoker(%d, %s): setting the Python path to %s", GetId(), m_source, m_pythonPath.c_str());
+#ifdef TARGET_WINDOWS
+  std::string pyPathUtf8;
+  g_charsetConverter.systemToUtf8(m_pythonPath, pyPathUtf8, false);
+  CLog::Log(LOGDEBUG, "CPythonInvoker(%d, %s): setting the Python path to %s", GetId(), m_sourceFile.c_str(), pyPathUtf8.c_str());
+#else // ! TARGET_WINDOWS
+  CLog::Log(LOGDEBUG, "CPythonInvoker(%d, %s): setting the Python path to %s", GetId(), m_sourceFile.c_str(), m_pythonPath.c_str());
+#endif // ! TARGET_WINDOWS
   PySys_SetPath((char *)m_pythonPath.c_str());
 
-  CLog::Log(LOGDEBUG, "CPythonInvoker(%d, %s): entering source directory %s", GetId(), m_source, scriptDir.c_str());
+  CLog::Log(LOGDEBUG, "CPythonInvoker(%d, %s): entering source directory %s", GetId(), m_sourceFile.c_str(), scriptDir.c_str());
   PyObject* module = PyImport_AddModule((char*)"__main__");
   PyObject* moduleDict = PyModule_GetDict(module);
 
@@ -241,6 +268,7 @@ bool CPythonInvoker::execute(const std::string &script, const std::vector<std::s
   PyThreadState_Swap(state);
 
   bool failed = false;
+  std::string exceptionType, exceptionValue, exceptionTraceback;
   if (!stopping)
   {
     try
@@ -249,34 +277,31 @@ bool CPythonInvoker::execute(const std::string &script, const std::vector<std::s
       // We need to have python open the file because on Windows the DLL that python
       //  is linked against may not be the DLL that xbmc is linked against so
       //  passing a FILE* to python from an fopen has the potential to crash.
-      PyObject* file = PyFile_FromString((char *) CSpecialProtocol::TranslatePath(m_source).c_str(), (char*)"r");
+      std::string nativeFilename(realFilename); // filename in system encoding
+#ifdef TARGET_WINDOWS
+      if (!g_charsetConverter.utf8ToSystem(nativeFilename, true))
+      {
+        CLog::Log(LOGERROR, "CPythonInvoker(%d, %s): can't convert filename \"%s\" to system encoding", GetId(), m_sourceFile.c_str(), realFilename.c_str());
+        return false;
+      }
+#endif
+      PyObject* file = PyFile_FromString((char *)nativeFilename.c_str(), (char*)"r");
       FILE *fp = PyFile_AsFile(file);
 
       if (fp != NULL)
       {
-        PyObject *f = PyString_FromString(CSpecialProtocol::TranslatePath(m_source).c_str());
+        PyObject *f = PyString_FromString(nativeFilename.c_str());
         PyDict_SetItemString(moduleDict, "__file__", f);
 
-        if (m_addon.get() != NULL)
-        {
-          PyObject *pyaddonid = PyString_FromString(m_addon->ID().c_str());
-          PyDict_SetItemString(moduleDict, "__xbmcaddonid__", pyaddonid);
-
-          CStdString version = ADDON::GetXbmcApiVersionDependency(m_addon);
-          PyObject *pyxbmcapiversion = PyString_FromString(version.c_str());
-          PyDict_SetItemString(moduleDict, "__xbmcapiversion__", pyxbmcapiversion);
-
-          CLog::Log(LOGDEBUG, "CPythonInvoker(%d, %s): instantiating addon using automatically obtained id of \"%s\" dependent on version %s of the xbmc.python api",
-            GetId(), m_source, m_addon->ID().c_str(), version.c_str());
-        }
+        onPythonModuleInitialization(moduleDict);
 
         Py_DECREF(f);
         setState(InvokerStateRunning);
         XBMCAddon::Python::PyContext pycontext; // this is a guard class that marks this callstack as being in a python context
-        PyRun_FileExFlags(fp, CSpecialProtocol::TranslatePath(m_source).c_str(), m_Py_file_input, moduleDict, moduleDict,1,NULL);
+        executeScript(fp, nativeFilename, module, moduleDict);
       }
       else
-        CLog::Log(LOGERROR, "CPythonInvoker(%d, %s): %s not found!", GetId(), m_source, m_source);
+        CLog::Log(LOGERROR, "CPythonInvoker(%d, %s): %s not found!", GetId(), m_sourceFile.c_str(), m_sourceFile.c_str());
     }
     catch (const XbmcCommons::Exception& e)
     {
@@ -287,70 +312,56 @@ bool CPythonInvoker::execute(const std::string &script, const std::vector<std::s
     catch (...)
     {
       setState(InvokerStateFailed);
-      CLog::Log(LOGERROR, "CPythonInvoker(%d, %s): failure in script", GetId(), m_source);
+      CLog::Log(LOGERROR, "CPythonInvoker(%d, %s): failure in script", GetId(), m_sourceFile.c_str());
       failed = true;
     }
   }
 
   bool systemExitThrown = false;
+  InvokerState stateToSet;
   if (!failed && !PyErr_Occurred())
   {
-    CLog::Log(LOGINFO, "CPythonInvoker(%d, %s): script successfully run", GetId(), m_source);
-    setState(InvokerStateDone);
+    CLog::Log(LOGINFO, "CPythonInvoker(%d, %s): script successfully run", GetId(), m_sourceFile.c_str());
+    stateToSet = InvokerStateDone;
+    onSuccess();
   }
   else if (PyErr_ExceptionMatches(PyExc_SystemExit))
   {
     systemExitThrown = true;
-    CLog::Log(LOGINFO, "CPythonInvoker(%d, %s): script aborted", GetId(), m_source);
-    setState(InvokerStateFailed);
+    CLog::Log(LOGINFO, "CPythonInvoker(%d, %s): script aborted", GetId(), m_sourceFile.c_str());
+    stateToSet = InvokerStateFailed;
+    onAbort();
   }
   else
   {
-    setState(InvokerStateFailed);
+    stateToSet = InvokerStateFailed;
 
     // if it failed with an exception we already logged the details
     if (!failed)
     {
-      PythonBindings::PythonToCppException e;
-      e.LogThrowMessage();
+      PythonBindings::PythonToCppException *e = NULL;
+      if (PythonBindings::PythonToCppException::ParsePythonException(exceptionType, exceptionValue, exceptionTraceback))
+        e = new PythonBindings::PythonToCppException(exceptionType, exceptionValue, exceptionTraceback);
+      else
+        e = new PythonBindings::PythonToCppException();
+
+      e->LogThrowMessage();
+      delete e;
     }
 
-    {
-      CPyThreadState releaseGil;
-      CSingleLock gc(g_graphicsContext);
-
-      CGUIDialogKaiToast *pDlgToast = (CGUIDialogKaiToast*)g_windowManager.GetWindow(WINDOW_DIALOG_KAI_TOAST);
-      if (pDlgToast != NULL)
-      {
-        CStdString desc;
-        CStdString script;
-        if (m_addon.get() != NULL)
-          script = m_addon->Name();
-        else
-        {
-          CStdString path;
-          URIUtils::Split(m_source, path, script);
-          if (script.Equals("default.py"))
-          {
-            CStdString path2;
-            URIUtils::RemoveSlashAtEnd(path);
-            URIUtils::Split(path, path2, script);
-          }
-        }
-
-        desc.Format(g_localizeStrings.Get(2100), script);
-        pDlgToast->QueueNotification(CGUIDialogKaiToast::Error, g_localizeStrings.Get(257), desc);
-      }
-    }
+    onError(exceptionType, exceptionValue, exceptionTraceback);
   }
 
   // no need to do anything else because the script has already stopped
   if (failed)
+  {
+    setState(stateToSet);
     return true;
+  }
 
   PyObject *m = PyImport_AddModule((char*)"xbmc");
   if (m == NULL || PyObject_SetAttrString(m, (char*)"abortRequested", PyBool_FromLong(1)))
-    CLog::Log(LOGERROR, "CPythonInvoker(%d, %s): failed to set abortRequested", GetId(), m_source);
+    CLog::Log(LOGERROR, "CPythonInvoker(%d, %s): failed to set abortRequested", GetId(), m_sourceFile.c_str());
 
   // make sure all sub threads have finished
   for (PyThreadState* s = state->interp->tstate_head, *old = NULL; s;)
@@ -362,7 +373,7 @@ bool CPythonInvoker::execute(const std::string &script, const std::vector<std::s
     }
     if (old != s)
     {
-      CLog::Log(LOGINFO, "CPythonInvoker(%d, %s): waiting on thread %"PRIu64, GetId(), m_source, (uint64_t)s->thread_id);
+      CLog::Log(LOGINFO, "CPythonInvoker(%d, %s): waiting on thread %" PRIu64, GetId(), m_sourceFile.c_str(), (uint64_t)s->thread_id);
       old = s;
     }
 
@@ -374,7 +385,7 @@ bool CPythonInvoker::execute(const std::string &script, const std::vector<std::s
   }
 
   // pending calls must be cleared out
-  XBMCAddon::RetardedAsynchCallbackHandler::clearPendingCalls(state);
+  XBMCAddon::RetardedAsyncCallbackHandler::clearPendingCalls(state);
 
   PyThreadState_Swap(NULL);
   PyEval_ReleaseLock();
@@ -392,18 +403,18 @@ bool CPythonInvoker::execute(const std::string &script, const std::vector<std::s
   PyEval_AcquireLock();
   PyThreadState_Swap(state);
 
-  g_pythonParser.DeInitializeInterpreter();
+  onDeinitialization();
 
   // run the gc before finishing
   //
-  // if the script exited by throwing a SystemExit excepton then going back
+  // if the script exited by throwing a SystemExit exception then going back
   // into the interpreter causes this python bug to get hit:
   //    http://bugs.python.org/issue10582
   // and that causes major failures. So we are not going to go back in
   // to run the GC if that's the case.
   if (!m_stop && languageHook->HasRegisteredAddonClasses() && !systemExitThrown &&
       PyRun_SimpleString(GC_SCRIPT) == -1)
-    CLog::Log(LOGERROR, "CPythonInvoker(%d, %s): failed to run the gc to clean up after running prior to shutting down the Interpreter", GetId(), m_source);
+    CLog::Log(LOGERROR, "CPythonInvoker(%d, %s): failed to run the gc to clean up after running prior to shutting down the Interpreter", GetId(), m_sourceFile.c_str());
 
   Py_EndInterpreter(state);
 
@@ -411,14 +422,25 @@ bool CPythonInvoker::execute(const std::string &script, const std::vector<std::s
   if (languageHook->HasRegisteredAddonClasses())
     CLog::Log(LOGWARNING, "CPythonInvoker(%d, %s): the python script \"%s\" has left several "
       "classes in memory that we couldn't clean up. The classes include: %s",
-      GetId(), m_source, m_source, getListOfAddonClassesAsString(languageHook).c_str());
+      GetId(), m_sourceFile.c_str(), m_sourceFile.c_str(), getListOfAddonClassesAsString(languageHook).c_str());
 
   // unregister the language hook
   languageHook->UnregisterMe();
 
   PyEval_ReleaseLock();
 
+  setState(stateToSet);
+
   return true;
+}
+
+void CPythonInvoker::executeScript(void *fp, const std::string &script, void *module, void *moduleDict)
+{
+  if (fp == NULL || script.empty() || module == NULL || moduleDict == NULL)
+    return;
+
+  int m_Py_file_input = Py_file_input;
+  PyRun_FileExFlags(static_cast<FILE*>(fp), script.c_str(), m_Py_file_input, static_cast<PyObject*>(moduleDict), static_cast<PyObject*>(moduleDict), 1, NULL);
 }
 
 bool CPythonInvoker::stop(bool abort)
@@ -438,12 +460,12 @@ bool CPythonInvoker::stop(bool abort)
 
     //tell xbmc.Monitor to call onAbortRequested()
     if (m_addon != NULL)
-      g_pythonParser.OnAbortRequested(m_addon->ID());
+      onAbortRequested();
 
     PyObject *m;
     m = PyImport_AddModule((char*)"xbmc");
     if (m == NULL || PyObject_SetAttrString(m, (char*)"abortRequested", PyBool_FromLong(1)))
-      CLog::Log(LOGERROR, "CPythonInvoker(%d, %s): failed to set abortRequested", GetId(), m_source);
+      CLog::Log(LOGERROR, "CPythonInvoker(%d, %s): failed to set abortRequested", GetId(), m_sourceFile.c_str());
 
     PyThreadState_Swap(old);
     old = NULL;
@@ -454,7 +476,7 @@ bool CPythonInvoker::stop(bool abort)
     {
       if (timeout.IsTimePast())
       {
-        CLog::Log(LOGERROR, "CPythonInvoker(%d, %s): script didn't stop in %d seconds - let's kill it", GetId(), m_source, PYTHON_SCRIPT_TIMEOUT / 1000);
+        CLog::Log(LOGERROR, "CPythonInvoker(%d, %s): script didn't stop in %d seconds - let's kill it", GetId(), m_sourceFile.c_str(), PYTHON_SCRIPT_TIMEOUT / 1000);
         break;
       }
 
@@ -463,14 +485,13 @@ bool CPythonInvoker::stop(bool abort)
       // on TMSG_GUI_PYTHON_DIALOG messages, so pump the message loop.
       if (g_application.IsCurrentThread())
       {
-        CSingleExit ex(g_graphicsContext);
-        CApplicationMessenger::Get().ProcessMessages();
+        CApplicationMessenger::GetInstance().ProcessMessages();
       }
     }
 
     // Useful for add-on performance metrics
     if (!timeout.IsTimePast())
-      CLog::Log(LOGDEBUG, "CPythonInvoker(%d, %s): script termination took %dms", GetId(), m_source, PYTHON_SCRIPT_TIMEOUT - timeout.MillisLeft());
+      CLog::Log(LOGDEBUG, "CPythonInvoker(%d, %s): script termination took %dms", GetId(), m_sourceFile.c_str(), PYTHON_SCRIPT_TIMEOUT - timeout.MillisLeft());
 
     // everything which didn't exit by now gets killed
     {
@@ -493,7 +514,7 @@ bool CPythonInvoker::stop(bool abort)
       }
 
       // If a dialog entered its doModal(), we need to wake it to see the exception
-      g_pythonParser.PulseGlobalEvent();
+      pulseGlobalEvent();
     }
 
     if (old != NULL)
@@ -506,21 +527,151 @@ bool CPythonInvoker::stop(bool abort)
   return true;
 }
 
-void CPythonInvoker::onError()
+void CPythonInvoker::onExecutionFailed()
 {
   PyThreadState_Swap(NULL);
   PyEval_ReleaseLock();
 
   setState(InvokerStateFailed);
-  CLog::Log(LOGERROR, "CPythonInvoker(%d, %s): abnormally terminating python thread", GetId(), m_source);
+  CLog::Log(LOGERROR, "CPythonInvoker(%d, %s): abnormally terminating python thread", GetId(), m_sourceFile.c_str());
 
   CSingleLock lock(m_critical);
   m_threadState = NULL;
 
-  ILanguageInvoker::onError();
+  ILanguageInvoker::onExecutionFailed();
 }
 
-void CPythonInvoker::addPath(const std::string path)
+std::map<std::string, CPythonInvoker::PythonModuleInitialization> CPythonInvoker::getModules() const
+{
+  static std::map<std::string, PythonModuleInitialization> modules;
+  return modules;
+}
+
+void CPythonInvoker::onInitialization()
+{
+  XBMC_TRACE;
+  {
+    GilSafeSingleLock lock(s_critical);
+    initializeModules(getModules());
+  }
+
+  // get a possible initialization script
+  const char* runscript = getInitializationScript();
+  if (runscript!= NULL && strlen(runscript) > 0)
+  {
+    // redirecting default output to debug console
+    if (PyRun_SimpleString(runscript) == -1)
+      CLog::Log(LOGFATAL, "CPythonInvoker(%d, %s): initialize error", GetId(), m_sourceFile.c_str());
+  }
+}
+
+void CPythonInvoker::onPythonModuleInitialization(void* moduleDict)
+{
+  if (m_addon.get() == NULL || moduleDict == NULL)
+    return;
+
+  PyObject *moduleDictionary = (PyObject *)moduleDict;
+
+  PyObject *pyaddonid = PyString_FromString(m_addon->ID().c_str());
+  PyDict_SetItemString(moduleDictionary, "__xbmcaddonid__", pyaddonid);
+
+  ADDON::AddonVersion version = m_addon->GetDependencyVersion("xbmc.python");
+  PyObject *pyxbmcapiversion = PyString_FromString(version.asString().c_str());
+  PyDict_SetItemString(moduleDictionary, "__xbmcapiversion__", pyxbmcapiversion);
+
+  PyObject *pyinvokerid = PyLong_FromLong(GetId());
+  PyDict_SetItemString(moduleDictionary, "__xbmcinvokerid__", pyinvokerid);
+
+  CLog::Log(LOGDEBUG, "CPythonInvoker(%d, %s): instantiating addon using automatically obtained id of \"%s\" dependent on version %s of the xbmc.python api",
+            GetId(), m_sourceFile.c_str(), m_addon->ID().c_str(), version.asString().c_str());
+}
+
+void CPythonInvoker::onDeinitialization()
+{
+  XBMC_TRACE;
+}
+
+void CPythonInvoker::onError(const std::string &exceptionType /* = "" */, const std::string &exceptionValue /* = "" */, const std::string &exceptionTraceback /* = "" */)
+{
+  CPyThreadState releaseGil;
+  CSingleLock gc(g_graphicsContext);
+
+  CGUIDialogKaiToast *pDlgToast = g_windowManager.GetWindow<CGUIDialogKaiToast>(WINDOW_DIALOG_KAI_TOAST);
+  if (pDlgToast != NULL)
+  {
+    std::string message;
+    if (m_addon && !m_addon->Name().empty())
+      message = StringUtils::Format(g_localizeStrings.Get(2102).c_str(), m_addon->Name().c_str());
+    else if (m_sourceFile == CSpecialProtocol::TranslatePath("special://profile/autoexec.py"))
+      message = StringUtils::Format(g_localizeStrings.Get(2102).c_str(), "autoexec.py");
+    else
+       message = g_localizeStrings.Get(2103);
+    pDlgToast->QueueNotification(CGUIDialogKaiToast::Error, message, g_localizeStrings.Get(2104));
+  }
+}
+
+const char* CPythonInvoker::getInitializationScript() const
+{
+  return NULL;
+}
+
+void CPythonInvoker::initializeModules(const std::map<std::string, PythonModuleInitialization> &modules)
+{
+  for (std::map<std::string, PythonModuleInitialization>::const_iterator module = modules.begin(); module != modules.end(); ++module)
+  {
+    if (!initializeModule(module->second))
+      CLog::Log(LOGWARNING, "CPythonInvoker(%d, %s): unable to initialize python module \"%s\"", GetId(), m_sourceFile.c_str(), module->first.c_str());
+  }
+}
+
+bool CPythonInvoker::initializeModule(PythonModuleInitialization module)
+{
+  if (module == NULL)
+    return false;
+
+  module();
+  return true;
+}
+
+void CPythonInvoker::getAddonModuleDeps(const ADDON::AddonPtr& addon, std::set<std::string>& paths)
+{
+  ADDON::ADDONDEPS deps = addon->GetDeps();
+  for (ADDON::ADDONDEPS::const_iterator it = deps.begin(); it != deps.end(); ++it)
+  {
+    //Check if dependency is a module addon
+    ADDON::AddonPtr dependency;
+    if (CServiceBroker::GetAddonMgr().GetAddon(it->first, dependency, ADDON::ADDON_SCRIPT_MODULE))
+    {
+      std::string path = CSpecialProtocol::TranslatePath(dependency->LibPath());
+      if (paths.find(path) == paths.end())
+      {
+        // add it and its dependencies
+        paths.insert(path);
+        getAddonModuleDeps(dependency, paths);
+      }
+    }
+  }
+}
+
+void CPythonInvoker::addPath(const std::string& path)
+{
+#if defined(TARGET_WINDOWS)
+  if (path.empty())
+    return;
+
+  std::string nativePath(path);
+  if (!g_charsetConverter.utf8ToSystem(nativePath, true))
+  {
+    CLog::Log(LOGERROR, "%s: can't convert UTF-8 path \"%s\" to system encoding", __FUNCTION__, path.c_str());
+    return;
+  }
+  addNativePath(nativePath);
+#else
+  addNativePath(path);
+#endif // defined(TARGET_WINDOWS)
+}
+
+void CPythonInvoker::addNativePath(const std::string& path)
 {
   if (path.empty())
     return;
@@ -528,11 +679,5 @@ void CPythonInvoker::addPath(const std::string path)
   if (!m_pythonPath.empty())
     m_pythonPath += PY_PATH_SEP;
 
-#if defined(TARGET_WINDOWS)
-  CStdString tmp(path);
-  g_charsetConverter.utf8ToSystem(tmp);
-  m_pythonPath += tmp;
-#else
   m_pythonPath += path;
-#endif // defined(TARGET_WINDOWS)
 }

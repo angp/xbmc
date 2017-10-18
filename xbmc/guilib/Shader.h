@@ -1,9 +1,8 @@
-#ifndef __SHADER_H__
-#define __SHADER_H__
+#pragma once
 
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      Copyright (C) 2005-2015 Team Kodi
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -16,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
+ *  along with Kodi; see the file COPYING.  If not, see
  *  <http://www.gnu.org/licenses/>.
  *
  */
@@ -31,8 +30,6 @@
 
 namespace Shaders {
 
-  using namespace std;
-
   //////////////////////////////////////////////////////////////////////
   // CShader - base class
   //////////////////////////////////////////////////////////////////////
@@ -40,18 +37,19 @@ namespace Shaders {
   {
   public:
     CShader() { m_compiled = false; }
-    virtual ~CShader() {}
+    virtual ~CShader() = default;
     virtual bool Compile() = 0;
     virtual void Free() = 0;
     virtual GLuint Handle() = 0;
-    virtual void SetSource(const string& src) { m_source = src; }
-    virtual bool LoadSource(const string& filename, const string& prefix = "");
-    bool OK() { return m_compiled; }
+    virtual void SetSource(const std::string& src) { m_source = src; }
+    virtual bool LoadSource(const std::string& filename, const std::string& prefix = "");
+    virtual bool AppendSource(const std::string& filename);
+    bool OK() const { return m_compiled; }
 
   protected:
-    string m_source;
-    string m_lastLog;
-    vector<string> m_attr;
+    std::string m_source;
+    std::string m_lastLog;
+    std::vector<std::string> m_attr;
     bool m_compiled;
 
   };
@@ -64,9 +62,9 @@ namespace Shaders {
   {
   public:
     CVertexShader() { m_vertexShader = 0; }
-    virtual ~CVertexShader() { Free(); }
-    virtual void Free() {}
-    virtual GLuint Handle() { return m_vertexShader; }
+    ~CVertexShader() override { Free(); }
+    void Free() override {}
+    GLuint Handle() override { return m_vertexShader; }
 
   protected:
     GLuint m_vertexShader;
@@ -75,16 +73,16 @@ namespace Shaders {
   class CGLSLVertexShader : public CVertexShader
   {
   public:
-    virtual void Free();
-    virtual bool Compile();
+    void Free() override;
+    bool Compile() override;
   };
 
 #ifndef HAS_GLES
   class CARBVertexShader : public CVertexShader
   {
   public:
-    virtual void Free();
-    virtual bool Compile();
+    void Free() override;
+    bool Compile() override;
   };
 #endif
 
@@ -96,9 +94,9 @@ namespace Shaders {
   {
   public:
     CPixelShader() { m_pixelShader = 0; }
-    virtual ~CPixelShader() { Free(); }
-    virtual void Free() {}
-    virtual GLuint Handle() { return m_pixelShader; }
+    ~CPixelShader() override { Free(); }
+    void Free() override {}
+    GLuint Handle() override { return m_pixelShader; }
 
   protected:
     GLuint m_pixelShader;
@@ -108,16 +106,16 @@ namespace Shaders {
   class CGLSLPixelShader : public CPixelShader
   {
   public:
-    virtual void Free();
-    virtual bool Compile();
+    void Free() override;
+    bool Compile() override;
   };
 
 #ifndef HAS_GLES
   class CARBPixelShader : public CPixelShader
   {
   public:
-    virtual void Free();
-    virtual bool Compile();
+    void Free() override;
+    bool Compile() override;
   };
 #endif
 
@@ -150,7 +148,7 @@ namespace Shaders {
     virtual void Disable() = 0;
 
     // returns true if shader is compiled and linked
-    bool OK() { return m_ok; }
+    bool OK() const { return m_ok; }
 
     // free resources
     virtual void Free() {}
@@ -164,7 +162,7 @@ namespace Shaders {
     // compile and link the shaders
     virtual bool CompileAndLink() = 0;
 
-    // override to to perform custom tasks on successfull compilation
+    // override to to perform custom tasks on successful compilation
     // and linkage. E.g. obtaining handles to shader attributes.
     virtual void OnCompiledAndLinked() {}
 
@@ -189,13 +187,15 @@ namespace Shaders {
     : virtual public CShaderProgram
   {
   public:
-    CGLSLShaderProgram()
+    CGLSLShaderProgram() : 
+      m_validated(false)
       {
         m_pFP = new CGLSLPixelShader();
         m_pVP = new CGLSLVertexShader();
       }
     CGLSLShaderProgram(const std::string& vert
-                     , const std::string& frag)
+                     , const std::string& frag) :
+      m_validated(false)
       {
         m_pFP = new CGLSLPixelShader();
         m_pFP->LoadSource(frag);
@@ -204,16 +204,16 @@ namespace Shaders {
       }
 
     // enable the shader
-    virtual bool Enable();
+    bool Enable() override;
 
     // disable the shader
-    virtual void Disable();
+    void Disable() override;
 
     // free resources
-    virtual void Free();
+    void Free() override;
 
     // compile and link the shaders
-    virtual bool CompileAndLink();
+    bool CompileAndLink() override;
 
   protected:
     GLint         m_lastProgram;
@@ -241,16 +241,16 @@ namespace Shaders {
       }
 
     // enable the shader
-    virtual bool Enable();
+    bool Enable() override;
 
     // disable the shader
-    virtual void Disable();
+    void Disable() override;
 
     // free resources
-    virtual void Free();
+    void Free() override;
 
     // compile and link the shaders
-    virtual bool CompileAndLink();
+    bool CompileAndLink() override;
 
   protected:
 
@@ -261,4 +261,3 @@ namespace Shaders {
 
 #endif
 
-#endif //__SHADER_H__

@@ -18,6 +18,7 @@
  *
  */
 
+#include "ServiceBroker.h"
 #include "utils/JobManager.h"
 #include "settings/Settings.h"
 #include "utils/SystemInfo.h"
@@ -30,25 +31,29 @@ class TestJobManager : public testing::Test
 protected:
   TestJobManager()
   {
-    /* TODO
-    CSettingsCategory* net = CSettings::Get().AddCategory(4, "network", 798);
-    CSettings::Get().AddBool(net, "network.usehttpproxy", 708, false);
-    CSettings::Get().AddString(net, "network.httpproxyserver", 706, "",
+    //! @todo implement
+    /*
+    CSettingsCategory* net = CServiceBroker::GetSettings().AddCategory(4, "network", 798);
+    CServiceBroker::GetSettings().AddBool(net, CSettings::SETTING_NETWORK_USEHTTPPROXY, 708, false);
+    CServiceBroker::GetSettings().AddString(net, CSettings::SETTING_NETWORK_HTTPPROXYSERVER, 706, "",
                             EDIT_CONTROL_INPUT);
-    CSettings::Get().AddString(net, "network.httpproxyport", 730, "8080",
+    CServiceBroker::GetSettings().AddString(net, CSettings::SETTING_NETWORK_HTTPPROXYPORT, 730, "8080",
                             EDIT_CONTROL_NUMBER_INPUT, false, 707);
-    CSettings::Get().AddString(net, "network.httpproxyusername", 1048, "",
+    CServiceBroker::GetSettings().AddString(net, CSettings::SETTING_NETWORK_HTTPPROXYUSERNAME, 1048, "",
                             EDIT_CONTROL_INPUT);
-    CSettings::Get().AddString(net, "network.httpproxypassword", 733, "",
+    CServiceBroker::GetSettings().AddString(net, CSettings::SETTING_NETWORK_HTTPPROXYPASSWORD, 733, "",
                             EDIT_CONTROL_HIDDEN_INPUT,true,733);
-    CSettings::Get().AddInt(net, "network.bandwidth", 14041, 0, 0, 512, 100*1024,
+    CServiceBroker::GetSettings().AddInt(net, CSettings::SETTING_NETWORK_BANDWIDTH, 14041, 0, 0, 512, 100*1024,
                          SPIN_CONTROL_INT_PLUS, 14048, 351);
     */
   }
 
-  ~TestJobManager()
+  ~TestJobManager() override
   {
-    CSettings::Get().Unload();
+    /* Always cancel jobs test completion */
+    CJobManager::GetInstance().CancelJobs();
+    CJobManager::GetInstance().Restart();
+    CServiceBroker::GetSettings().Unload();
   }
 };
 
@@ -56,7 +61,6 @@ TEST_F(TestJobManager, AddJob)
 {
   CJob* job = new CSysInfoJob();
   CJobManager::GetInstance().AddJob(job, NULL);
-  CJobManager::GetInstance().CancelJobs();
 }
 
 TEST_F(TestJobManager, CancelJob)
@@ -67,26 +71,111 @@ TEST_F(TestJobManager, CancelJob)
   CJobManager::GetInstance().CancelJob(id);
 }
 
-TEST_F(TestJobManager, Pause)
+namespace
 {
-  CJob* job = new CSysInfoJob();
-  CJobManager::GetInstance().AddJob(job, NULL, CJob::PRIORITY_NORMAL);
+struct JobControlPackage
+{
+  JobControlPackage() :
+    ready (false)
+  {
+    // We're not ready to wait yet
+    jobCreatedMutex.lock();
+  }
 
-  EXPECT_FALSE(CJobManager::GetInstance().IsPaused(CJob::PRIORITY_NORMAL));
-  CJobManager::GetInstance().Pause(CJob::PRIORITY_NORMAL);
-  EXPECT_TRUE(CJobManager::GetInstance().IsPaused(CJob::PRIORITY_NORMAL));
-  CJobManager::GetInstance().UnPause(CJob::PRIORITY_NORMAL);
-  EXPECT_FALSE(CJobManager::GetInstance().IsPaused(CJob::PRIORITY_NORMAL));
+  ~JobControlPackage()
+  {
+    jobCreatedMutex.unlock();
+  }
 
-  CJobManager::GetInstance().CancelJobs();
+  bool ready;
+  XbmcThreads::ConditionVariable jobCreatedCond;
+  CCriticalSection jobCreatedMutex;
+};
+
+class BroadcastingJob :
+  public CJob
+{
+public:
+
+  BroadcastingJob(JobControlPackage &package) :
+    m_package(package),
+    m_finish(false)
+  {
+  }
+
+  void FinishAndStopBlocking()
+  {
+    CSingleLock lock(m_blockMutex);
+
+    m_finish = true;
+    m_block.notifyAll();
+  }
+
+  const char * GetType() const override
+  {
+    return "BroadcastingJob";
+  }
+
+  bool DoWork() override
+  {
+    {
+      CSingleLock lock(m_package.jobCreatedMutex);
+    
+      m_package.ready = true;
+      m_package.jobCreatedCond.notifyAll();
+    }
+
+    CSingleLock blockLock(m_blockMutex);
+
+    // Block until we're told to go away
+    while (!m_finish)
+      m_block.wait(m_blockMutex);
+    return true;
+  }
+
+private:
+
+  JobControlPackage &m_package;
+
+  XbmcThreads::ConditionVariable m_block;
+  CCriticalSection m_blockMutex;
+  bool m_finish;
+};
+
+BroadcastingJob *
+WaitForJobToStartProcessing(CJob::PRIORITY priority, JobControlPackage &package)
+{
+  BroadcastingJob* job = new BroadcastingJob(package);
+  CJobManager::GetInstance().AddJob(job, NULL, priority);
+
+  // We're now ready to wait, wait and then unblock once ready
+  while (!package.ready)
+    package.jobCreatedCond.wait(package.jobCreatedMutex);
+
+  return job;
+}
+}
+  
+TEST_F(TestJobManager, PauseLowPriorityJob)
+{
+  JobControlPackage package;
+  BroadcastingJob *job (WaitForJobToStartProcessing(CJob::PRIORITY_LOW_PAUSABLE, package));
+
+  EXPECT_TRUE(CJobManager::GetInstance().IsProcessing(CJob::PRIORITY_LOW_PAUSABLE));
+  CJobManager::GetInstance().PauseJobs();
+  EXPECT_FALSE(CJobManager::GetInstance().IsProcessing(CJob::PRIORITY_LOW_PAUSABLE));
+  CJobManager::GetInstance().UnPauseJobs();
+  EXPECT_TRUE(CJobManager::GetInstance().IsProcessing(CJob::PRIORITY_LOW_PAUSABLE));
+
+  job->FinishAndStopBlocking();
 }
 
 TEST_F(TestJobManager, IsProcessing)
 {
-  CJob* job = new CSysInfoJob();
-  CJobManager::GetInstance().AddJob(job, NULL);
+  JobControlPackage package;
+  BroadcastingJob *job (WaitForJobToStartProcessing(CJob::PRIORITY_LOW_PAUSABLE, package));
 
   EXPECT_EQ(0, CJobManager::GetInstance().IsProcessing(""));
 
-  CJobManager::GetInstance().CancelJobs();
+  job->FinishAndStopBlocking();
 }

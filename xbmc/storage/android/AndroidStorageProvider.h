@@ -19,23 +19,33 @@
  *
  */
 
+#include <set>
+#include <string>
+#include <vector>
+
 #include "storage/IStorageProvider.h"
 
 class CAndroidStorageProvider : public IStorageProvider
 {
 public:
-  CAndroidStorageProvider() { }
+  CAndroidStorageProvider();
   virtual ~CAndroidStorageProvider() { }
 
   virtual void Initialize() { }
   virtual void Stop() { }
+  virtual bool Eject(const std::string& mountpath) { return false; }
 
   virtual void GetLocalDrives(VECSOURCES &localDrives);
   virtual void GetRemovableDrives(VECSOURCES &removableDrives);
-  
-  virtual bool Eject(CStdString mountpath);
-
-  virtual std::vector<CStdString> GetDiskUsage();
+  virtual std::vector<std::string> GetDiskUsage();
 
   virtual bool PumpDriveChangeEvents(IStorageEventsCallback *callback);
+
+private:
+  std::string unescape(const std::string& str);
+  VECSOURCES m_removableDrives;
+  unsigned int m_removableLength;
+
+  static std::set<std::string> GetRemovableDrives();
+  static std::set<std::string> GetRemovableDrivesLinux();
 };

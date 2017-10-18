@@ -19,6 +19,8 @@
  *
  */
 
+#include <vector>
+
 #include "IDirectory.h"
 
 class CMediaSource;
@@ -30,10 +32,10 @@ namespace XFILE
   {
   public:
     CSourcesDirectory(void);
-    virtual ~CSourcesDirectory(void);
-    virtual bool GetDirectory(const CStdString& strPath, CFileItemList &items);
+    ~CSourcesDirectory(void) override;
+    bool GetDirectory(const CURL& url, CFileItemList &items) override;
     bool GetDirectory(const VECSOURCES &sources, CFileItemList &items);
-    virtual bool Exists(const char* strPath);
-    virtual bool IsAllowed(const CStdString &strFile) const { return true; };
+    bool Exists(const CURL& url) override;
+    bool AllowAll() const override { return true; }
   };
 }

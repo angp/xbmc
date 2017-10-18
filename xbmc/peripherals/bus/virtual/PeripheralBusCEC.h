@@ -20,7 +20,6 @@
  */
 
 #include "peripherals/bus/PeripheralBus.h"
-#include "peripherals/devices/Peripheral.h"
 
 // undefine macro isset, it collides with function in cectypes.h
 #ifdef isset
@@ -41,13 +40,13 @@ namespace PERIPHERALS
   class CPeripheralBusCEC : public CPeripheralBus
   {
   public:
-    CPeripheralBusCEC(CPeripherals *manager);
-    virtual ~CPeripheralBusCEC(void);
+    explicit CPeripheralBusCEC(CPeripherals& manager);
+    ~CPeripheralBusCEC(void) override;
 
     /*!
      * @see PeripheralBus::PerformDeviceScan()
      */
-    bool PerformDeviceScan(PeripheralScanResults &results);
+    bool PerformDeviceScan(PeripheralScanResults &results) override;
 
   private:
     DllLibCEC*                m_dll;

@@ -20,10 +20,6 @@
 
 #pragma once
 
-#if (defined HAVE_CONFIG_H) && (!defined TARGET_WINDOWS)
-  #include "config.h"
-#endif
-
 #include <Python.h>
 
 #include "interfaces/legacy/LanguageHook.h"
@@ -43,57 +39,55 @@ namespace XBMCAddon
      *  plugging into the API. It's got a static only implementation
      *  and uses the singleton pattern for access.
      */
-    class LanguageHook : public XBMCAddon::LanguageHook
+    class PythonLanguageHook : public XBMCAddon::LanguageHook
     {
       PyInterpreterState* m_interp;
       CCriticalSection crit;
       std::set<AddonClass*> currentObjects;
 
       // This constructor is only used to instantiate the global LanguageHook
-      inline LanguageHook() : 
-        XBMCAddon::LanguageHook("Python::LanguageHook(Global)"), m_interp(NULL)  {  }
+      inline PythonLanguageHook() : m_interp(NULL)  {  }
 
     public:
 
-      inline LanguageHook(PyInterpreterState* interp) : 
-        XBMCAddon::LanguageHook("Python::LanguageHook"), m_interp(interp)  {  }
+      inline explicit PythonLanguageHook(PyInterpreterState* interp) : m_interp(interp)  {  }
+      ~PythonLanguageHook() override;
 
-      virtual ~LanguageHook();
-
-      virtual void DelayedCallOpen();
-      virtual void DelayedCallClose();
-      virtual void MakePendingCalls();
+      void DelayedCallOpen() override;
+      void DelayedCallClose() override;
+      void MakePendingCalls() override;
       
       /**
        * PythonCallbackHandler expects to be instantiated PER AddonClass instance
-       *  that is to be used as a callback. This is why this cannot be instantited
+       *  that is to be used as a callback. This is why this cannot be instantiated
        *  once.
        *
        * There is an expectation that this method is called from the Python thread
        *  that instantiated an AddonClass that has the potential for a callback.
        *
-       * See RetardedAsynchCallbackHandler for more details.
+       * See RetardedAsyncCallbackHandler for more details.
        * See PythonCallbackHandler for more details
        * See PythonCallbackHandler::PythonCallbackHandler for more details
        */
-      virtual XBMCAddon::CallbackHandler* GetCallbackHandler();
+      XBMCAddon::CallbackHandler* GetCallbackHandler() override;
 
-      virtual String GetAddonId();
-      virtual String GetAddonVersion();
+      String GetAddonId() override;
+      String GetAddonVersion() override;
+      long GetInvokerId() override;
 
-      virtual void RegisterPlayerCallback(IPlayerCallback* player);
-      virtual void UnregisterPlayerCallback(IPlayerCallback* player);
-      virtual void RegisterMonitorCallback(XBMCAddon::xbmc::Monitor* monitor);
-      virtual void UnregisterMonitorCallback(XBMCAddon::xbmc::Monitor* monitor);
-      virtual bool WaitForEvent(CEvent& hEvent, unsigned int milliseconds);
+      void RegisterPlayerCallback(IPlayerCallback* player) override;
+      void UnregisterPlayerCallback(IPlayerCallback* player) override;
+      void RegisterMonitorCallback(XBMCAddon::xbmc::Monitor* monitor) override;
+      void UnregisterMonitorCallback(XBMCAddon::xbmc::Monitor* monitor) override;
+      bool WaitForEvent(CEvent& hEvent, unsigned int milliseconds) override;
 
-      static AddonClass::Ref<LanguageHook> GetIfExists(PyInterpreterState* interp);
+      static AddonClass::Ref<PythonLanguageHook> GetIfExists(PyInterpreterState* interp);
       static bool IsAddonClassInstanceRegistered(AddonClass* obj);
 
       void RegisterAddonClassInstance(AddonClass* obj);
       void UnregisterAddonClassInstance(AddonClass* obj);
       bool HasRegisteredAddonClassInstance(AddonClass* obj);
-      inline bool HasRegisteredAddonClasses() { Synchronize l(*this); return !currentObjects.empty(); }
+      inline bool HasRegisteredAddonClasses() { CSingleLock l(*this); return !currentObjects.empty(); }
 
       // You should hold the lock on the LanguageHook itself if you're
       // going to do anything with the set that gets returned.

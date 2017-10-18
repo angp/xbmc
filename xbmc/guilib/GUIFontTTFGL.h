@@ -18,37 +18,50 @@
  *
  */
 
-/*!
-\file GUIFont.h
-\brief
-*/
-
-#ifndef CGUILIB_GUIFONTTTF_GL_H
-#define CGUILIB_GUIFONTTTF_GL_H
 #pragma once
 
+#include <string>
+#include <vector>
 
 #include "GUIFontTTF.h"
+#include "system.h"
+#include "system_gl.h"
 
-
-/*!
- \ingroup textures
- \brief
- */
 class CGUIFontTTFGL : public CGUIFontTTFBase
 {
 public:
-  CGUIFontTTFGL(const CStdString& strFileName);
-  virtual ~CGUIFontTTFGL(void);
+  explicit CGUIFontTTFGL(const std::string& strFileName);
+  ~CGUIFontTTFGL(void) override;
 
-  virtual void Begin();
-  virtual void End();
+  bool FirstBegin() override;
+  void LastEnd() override;
+
+  CVertexBuffer CreateVertexBuffer(const std::vector<SVertex> &vertices) const override;
+  void DestroyVertexBuffer(CVertexBuffer &bufferHandle) const override;
+  static void CreateStaticVertexBuffers(void);
+  static void DestroyStaticVertexBuffers(void);
 
 protected:
-  virtual CBaseTexture* ReallocTexture(unsigned int& newHeight);
-  virtual bool CopyCharToTexture(FT_BitmapGlyph bitGlyph, unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y2);
-  virtual void DeleteHardwareTexture();
+  CBaseTexture* ReallocTexture(unsigned int& newHeight) override;
+  bool CopyCharToTexture(FT_BitmapGlyph bitGlyph, unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y2) override;
+  void DeleteHardwareTexture() override;
 
+  static GLuint m_elementArrayHandle;
+
+private:
+  unsigned int m_updateY1;
+  unsigned int m_updateY2;
+  
+  enum TextureStatus
+  {
+    TEXTURE_VOID = 0,
+    TEXTURE_READY,
+    TEXTURE_REALLOCATED,
+    TEXTURE_UPDATED,
+  };
+  
+  TextureStatus m_textureStatus;
+
+  static bool m_staticVertexBufferCreated;
 };
 
-#endif

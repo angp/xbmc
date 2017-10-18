@@ -46,7 +46,7 @@ public:
    
    \sa CJobManager and CJob
    */
-  virtual ~IJobCallback() {};
+  virtual ~IJobCallback() = default;
 
   /*!
    \brief The callback used when a job completes.
@@ -81,7 +81,7 @@ class CJobManager;
 
 /*!
  \ingroup jobs
- \brief Base class for jobs that are executed asyncronously.
+ \brief Base class for jobs that are executed asynchronously.
  
  Clients of the CJobManager should subclass CJob and provide the DoWork() function. Data should be
  passed to the job on creation, and any data sharing between the job and the client should be kept to within
@@ -106,9 +106,11 @@ public:
    \sa CJobManager
    */
   enum PRIORITY {
-    PRIORITY_LOW = 0,
+    PRIORITY_LOW_PAUSABLE = 0,
+    PRIORITY_LOW,
     PRIORITY_NORMAL,
-    PRIORITY_HIGH
+    PRIORITY_HIGH,
+    PRIORITY_DEDICATED, // will create a new worker if no worker is available at queue time
   };
   CJob() { m_callback = NULL; };
 
@@ -121,7 +123,7 @@ public:
    
    \sa CJobManager
    */
-  virtual ~CJob() {};
+  virtual ~CJob() = default;
 
   /*!
    \brief Main workhorse function of CJob instances
@@ -162,7 +164,7 @@ public:
    
    \sa IJobCallback::OnJobProgress()
    */
-  bool ShouldCancel(unsigned int progress, unsigned int total) const;
+  virtual bool ShouldCancel(unsigned int progress, unsigned int total) const;
 private:
   friend class CJobManager;
   CJobManager *m_callback;

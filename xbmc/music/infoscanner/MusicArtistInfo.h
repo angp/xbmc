@@ -20,7 +20,6 @@
  *
  */
 
-#include "music/Song.h"
 #include "music/Artist.h"
 #include "addons/Scraper.h"
 
@@ -33,8 +32,8 @@ class CMusicArtistInfo
 {
 public:
   CMusicArtistInfo() : m_bLoaded(false) {}
-  CMusicArtistInfo(const CStdString& strArtist, const CScraperUrl& strArtistURL);
-  virtual ~CMusicArtistInfo() {}
+  CMusicArtistInfo(const std::string& strArtist, const CScraperUrl& strArtistURL);
+  virtual ~CMusicArtistInfo() = default;
   bool Loaded() const { return m_bLoaded; }
   void SetLoaded() { m_bLoaded = true; }
   void SetArtist(const CArtist& artist);
@@ -42,7 +41,7 @@ public:
   CArtist& GetArtist() { return m_artist; }
   const CScraperUrl& GetArtistURL() const { return m_artistURL; }
   bool Load(XFILE::CCurlFile& http, const ADDON::ScraperPtr& scraper,
-    const CStdString &strSearch);
+    const std::string &strSearch);
 
 protected:
   CArtist m_artist;

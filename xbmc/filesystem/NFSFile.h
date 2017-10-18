@@ -26,8 +26,8 @@
 #include "URL.h"
 #include "threads/CriticalSection.h"
 #include <list>
-#include "SectionLoader.h"
 #include <map>
+#include "DllLibNfs.h" // for define NFSSTAT
 
 #ifdef TARGET_WINDOWS
 #define S_IRGRP 0
@@ -67,19 +67,20 @@ public:
   
   CNfsConnection();
   ~CNfsConnection();
-  bool Connect(const CURL &url, CStdString &relativePath);
-  struct nfs_context *GetNfsContext(){return m_pNfsContext;}
-  uint64_t          GetMaxReadChunkSize(){return m_readChunkSize;}
-  uint64_t          GetMaxWriteChunkSize(){return m_writeChunkSize;} 
-  DllLibNfs        *GetImpl(){return m_pLibNfs;}
-  std::list<CStdString> GetExportList(const CURL &url);
+  bool Connect(const CURL &url, std::string &relativePath);
+  struct nfs_context *GetNfsContext() {return m_pNfsContext;}
+  uint64_t GetMaxReadChunkSize() {return m_readChunkSize;}
+  uint64_t GetMaxWriteChunkSize() {return m_writeChunkSize;} 
+  DllLibNfs *GetImpl() {return m_pLibNfs;}
+  std::list<std::string> GetExportList(const CURL &url);
   //this functions splits the url into the exportpath (feed to mount) and the rest of the path
   //relative to the mounted export
-  bool splitUrlIntoExportAndPath(const CURL& url, CStdString &exportPath, CStdString &relativePath);
+  bool splitUrlIntoExportAndPath(const CURL& url, std::string &exportPath, std::string &relativePath, std::list<std::string> &exportList);
+  bool splitUrlIntoExportAndPath(const CURL& url, std::string &exportPath, std::string &relativePath);
   
   //special stat which uses its own context
   //needed for getting intervolume symlinks to work
-  int stat(const CURL &url, struct stat *statbuff);
+  int stat(const CURL &url, NFSSTAT *statbuff);
 
   void AddActiveConnection();
   void AddIdleConnection();
@@ -92,15 +93,15 @@ public:
   //removes file handle from keep alive list
   void removeFromKeepAliveList(struct nfsfh  *_pFileHandle);  
   
-  const CStdString& GetConnectedIp() const {return m_resolvedHostName;}
-  const CStdString& GetConnectedExport() const {return m_exportPath;}
-  const CStdString  GetContextMapId() const {return m_hostName + m_exportPath;}
+  const std::string& GetConnectedIp() const {return m_resolvedHostName;}
+  const std::string& GetConnectedExport() const {return m_exportPath;}
+  const std::string GetContextMapId() const {return m_hostName + m_exportPath;}
 
 private:
   struct nfs_context *m_pNfsContext;//current nfs context
-  CStdString m_exportPath;//current connected export path
-  CStdString m_hostName;//current connected host
-  CStdString m_resolvedHostName;//current connected host - as ip
+  std::string m_exportPath;//current connected export path
+  std::string m_hostName;//current connected host
+  std::string m_resolvedHostName;//current connected host - as ip
   uint64_t m_readChunkSize;//current read chunksize of connected server
   uint64_t m_writeChunkSize;//current write chunksize of connected server
   int m_OpenConnections;//number of open connections
@@ -109,14 +110,15 @@ private:
   tOpenContextMap m_openContextMap;//unique map for tracking all open contexts
   uint64_t m_lastAccessedTime;//last access time for m_pNfsContext
   DllLibNfs *m_pLibNfs;//the lib
-  std::list<CStdString> m_exportList;//list of exported pathes of current connected servers
+  std::list<std::string> m_exportList;//list of exported paths of current connected servers
   CCriticalSection keepAliveLock;
   CCriticalSection openContextLock;
  
   void clearMembers();
-  struct nfs_context *getContextFromMap(const CStdString &exportname, bool forceCacheHit = false);
-  int  getContextForExport(const CStdString &exportname);//get context for given export and add to open contexts map - sets m_pNfsContext (my return a already mounted cached context)
+  struct nfs_context *getContextFromMap(const std::string &exportname, bool forceCacheHit = false);
+  int getContextForExport(const std::string &exportname);//get context for given export and add to open contexts map - sets m_pNfsContext (my return a already mounted cached context)
   void destroyOpenContexts();
+  void destroyContext(const std::string &exportName);
   void resolveHost(const CURL &url);//resolve hostname by dnslookup
   void keepAlive(std::string _exportPath, struct nfsfh  *_pFileHandle);
 };
@@ -129,32 +131,32 @@ namespace XFILE
   {
   public:
     CNFSFile();
-    virtual ~CNFSFile();
-    virtual void Close();
-    virtual int64_t Seek(int64_t iFilePosition, int iWhence = SEEK_SET);
-    virtual unsigned int Read(void* lpBuf, int64_t uiBufSize);
-    virtual bool Open(const CURL& url);
-    virtual bool Exists(const CURL& url);
-    virtual int Stat(const CURL& url, struct __stat64* buffer);
-    virtual int Stat(struct __stat64* buffer);
-    virtual int64_t GetLength();
-    virtual int64_t GetPosition();
-    virtual int Write(const void* lpBuf, int64_t uiBufSize);
-    virtual int Truncate(int64_t iSize);
+    ~CNFSFile() override;
+    void Close() override;
+    int64_t Seek(int64_t iFilePosition, int iWhence = SEEK_SET) override;
+    ssize_t Read(void* lpBuf, size_t uiBufSize) override;
+    bool Open(const CURL& url) override;
+    bool Exists(const CURL& url) override;
+    int Stat(const CURL& url, struct __stat64* buffer) override;
+    int Stat(struct __stat64* buffer) override;
+    int64_t GetLength() override;
+    int64_t GetPosition() override;
+    ssize_t Write(const void* lpBuf, size_t uiBufSize) override;
+    int Truncate(int64_t iSize) override;
 
     //implement iocontrol for seek_possible for preventing the stat in File class for
     //getting this info ...
-    virtual int IoControl(EIoControl request, void* param){ if(request == IOCTRL_SEEK_POSSIBLE) return 1;return -1;};    
-    virtual int  GetChunkSize() {return 1;}
+    int IoControl(EIoControl request, void* param) override{ if(request == IOCTRL_SEEK_POSSIBLE) return 1;return -1;};    
+    int GetChunkSize() override {return gNfsConnection.GetMaxReadChunkSize();}
     
-    virtual bool OpenForWrite(const CURL& url, bool bOverWrite = false);
-    virtual bool Delete(const CURL& url);
-    virtual bool Rename(const CURL& url, const CURL& urlnew);    
+    bool OpenForWrite(const CURL& url, bool bOverWrite = false) override;
+    bool Delete(const CURL& url) override;
+    bool Rename(const CURL& url, const CURL& urlnew) override;    
   protected:
     CURL m_url;
-    bool IsValidFile(const CStdString& strFileName);
+    bool IsValidFile(const std::string& strFileName);
     int64_t m_fileSize;
-    struct nfsfh  *m_pFileHandle;
+    struct nfsfh *m_pFileHandle;
     struct nfs_context *m_pNfsContext;//current nfs context
     std::string m_exportPath;
   };

@@ -20,24 +20,17 @@
 #include "limits.h"
 #include "TagLibVFSStream.h"
 #include "filesystem/File.h"
-#include "utils/StdString.h"
-#include "utils/log.h"
 #include <taglib/tiostream.h>
 
 using namespace XFILE;
 using namespace TagLib;
 using namespace MUSIC_INFO;
-using namespace std;
-
-#ifdef TARGET_WINDOWS
-#pragma comment(lib, "tag.lib")
-#endif
 
 /*!
  * Construct a File object and opens the \a file.  \a file should be a
  * be an XBMC Vfile.
  */
-TagLibVFSStream::TagLibVFSStream(const string& strFileName, bool readOnly)
+TagLibVFSStream::TagLibVFSStream(const std::string& strFileName, bool readOnly)
 {
   m_bIsOpen = true;
   if (readOnly)
@@ -51,6 +44,7 @@ TagLibVFSStream::TagLibVFSStream(const string& strFileName, bool readOnly)
       m_bIsOpen = false;
   }
   m_strFileName = strFileName;
+  m_bIsReadOnly = readOnly || !m_bIsOpen;
 }
 
 /*!
@@ -75,7 +69,12 @@ FileName TagLibVFSStream::name() const
 ByteVector TagLibVFSStream::readBlock(TagLib::ulong length)
 {
   ByteVector byteVector(static_cast<TagLib::uint>(length));
-  byteVector.resize(m_file.Read(byteVector.data(), length));
+  ssize_t read = m_file.Read(byteVector.data(), length);
+  if (read > 0)
+    byteVector.resize(read);
+  else
+    byteVector.clear();
+
   return byteVector;
 }
 
@@ -122,7 +121,7 @@ void TagLibVFSStream::insert(const ByteVector &data, TagLib::ulong start, TagLib
   // Now I'll explain the steps in this ugliness:
 
   // First, make sure that we're working with a buffer that is longer than
-  // the *differnce* in the tag sizes.  We want to avoid overwriting parts
+  // the *difference* in the tag sizes.  We want to avoid overwriting parts
   // that aren't yet in memory, so this is necessary.
   TagLib::ulong bufferLength = bufferSize();
 
@@ -141,7 +140,9 @@ void TagLibVFSStream::insert(const ByteVector &data, TagLib::ulong start, TagLib
   // special case.  We're also using File::writeBlock() just for the tag.
   // That's a bit slower than using char *'s so, we're only doing it here.
   seek(readPosition);
-  int bytesRead = m_file.Read(aboutToOverwrite.data(), bufferLength);
+  ssize_t bytesRead = m_file.Read(aboutToOverwrite.data(), bufferLength);
+  if (bytesRead <= 0)
+    return; // error
   readPosition += bufferLength;
 
   seek(writePosition);
@@ -159,6 +160,8 @@ void TagLibVFSStream::insert(const ByteVector &data, TagLib::ulong start, TagLib
     // to overwrite.  Appropriately increment the readPosition.
     seek(readPosition);
     bytesRead = m_file.Read(aboutToOverwrite.data(), bufferLength);
+    if (bytesRead <= 0)
+      return; // error
     aboutToOverwrite.resize(bytesRead);
     readPosition += bufferLength;
 
@@ -170,7 +173,8 @@ void TagLibVFSStream::insert(const ByteVector &data, TagLib::ulong start, TagLib
     // Seek to the write position and write our buffer.  Increment the
     // writePosition.
     seek(writePosition);
-    m_file.Write(buffer.data(), buffer.size());
+    if (m_file.Write(buffer.data(), buffer.size()) < static_cast<ssize_t>(buffer.size()))
+      return; // error
     writePosition += buffer.size();
 
     buffer = aboutToOverwrite;
@@ -199,7 +203,11 @@ void TagLibVFSStream::removeBlock(TagLib::ulong start, TagLib::ulong length)
   while(bytesRead != 0)
   {
     seek(readPosition);
-    bytesRead = m_file.Read(buffer.data(), bufferLength);
+    ssize_t read = m_file.Read(buffer.data(), bufferLength);
+    if (read < 0)
+      return;// explicit error
+
+    bytesRead = static_cast<TagLib::ulong>(read);
     readPosition += bytesRead;
 
     // Check to see if we just read the last block.  We need to call clear()
@@ -208,7 +216,8 @@ void TagLibVFSStream::removeBlock(TagLib::ulong start, TagLib::ulong length)
       clear();
 
     seek(writePosition);
-    m_file.Write(buffer.data(), bytesRead);
+    if (m_file.Write(buffer.data(), bytesRead) != static_cast<ssize_t>(bytesRead))
+      return; // error
     writePosition += bytesRead;
   }
   truncate(writePosition);
@@ -239,6 +248,38 @@ bool TagLibVFSStream::isOpen() const
  */
 void TagLibVFSStream::seek(long offset, Position p)
 {
+  const long fileLen = length();
+  if (m_bIsReadOnly && fileLen > 0)
+  {
+    long startPos;
+    if (p == Beginning)
+      startPos = 0;
+    else if (p == Current)
+      startPos = tell();
+    else if (p == End)
+      startPos = fileLen;
+    else
+      return; // wrong Position value
+
+    // When parsing some broken files, taglib may try to seek above end of file.
+    // If underlying VFS does not move I/O pointer in this case, taglib will parse
+    // same part of file several times and ends with error. To prevent this
+    // situation, force seek to last valid position so VFS move I/O pointer.
+    if (startPos >= 0)
+    {
+      if (offset < 0 && startPos + offset < 0)
+      {
+        m_file.Seek(0, SEEK_SET);
+        return;
+      }
+      if (offset > 0 && startPos + offset > fileLen)
+      {
+        m_file.Seek(fileLen, SEEK_SET);
+        return;
+      }
+    }
+  }
+
   switch(p)
   {
     case Beginning:

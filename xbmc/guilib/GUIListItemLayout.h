@@ -32,9 +32,9 @@ class CGUIListItemLayout
 {
 public:
   CGUIListItemLayout();
-  CGUIListItemLayout(const CGUIListItemLayout &from);
+  CGUIListItemLayout(const CGUIListItemLayout &from, CGUIControl *control);
   virtual ~CGUIListItemLayout();
-  void LoadLayout(TiXmlElement *layout, int context, bool focused);
+  void LoadLayout(TiXmlElement *layout, int context, bool focused, float maxWidth, float maxHeight);
   void Process(CGUIListItem *item, int parentID, unsigned int currentTime, CDirtyRegionList &dirtyregions);
   void Render(CGUIListItem *item, int parentID);
   float Size(ORIENTATION orientation) const;
@@ -44,9 +44,10 @@ public:
   void ResetAnimation(ANIMATION_TYPE animType);
   void SetInvalid() { m_invalidated = true; };
   void FreeResources(bool immediately = false);
+  void SetParentControl(CGUIControl *control) { m_group.SetParentControl(control); };
 
-//#ifdef PRE_SKIN_VERSION_9_10_COMPATIBILITY
-  void CreateListControlLayouts(float width, float height, bool focused, const CLabelInfo &labelInfo, const CLabelInfo &labelInfo2, const CTextureInfo &texture, const CTextureInfo &textureFocus, float texHeight, float iconWidth, float iconHeight, const CStdString &nofocusCondition, const CStdString &focusCondition);
+//#ifdef GUILIB_PYTHON_COMPATIBILITY
+  void CreateListControlLayouts(float width, float height, bool focused, const CLabelInfo &labelInfo, const CLabelInfo &labelInfo2, const CTextureInfo &texture, const CTextureInfo &textureFocus, float texHeight, float iconWidth, float iconHeight, const std::string &nofocusCondition, const std::string &focusCondition);
 //#endif
 
   void SetWidth(float width);
@@ -70,7 +71,7 @@ protected:
   bool m_focused;
   bool m_invalidated;
 
-  unsigned int m_condition;
+  INFO::InfoPtr m_condition;
   CGUIInfoBool m_isPlaying;
 };
 

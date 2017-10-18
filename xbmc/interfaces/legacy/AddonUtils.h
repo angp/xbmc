@@ -27,10 +27,11 @@
 
 #pragma once
 
-//#define ENABLE_TRACE_API
+//#define ENABLE_XBMC_TRACE_API
 
 #include "threads/SingleLock.h"
 
+#include <memory>
 #include <vector>
 
 #ifdef TARGET_WINDOWS
@@ -41,49 +42,41 @@
  * This file contains the public definitions for the Addon api. It's meant to be used
  * by those writing language bindings.
  */
+
+namespace XBMCAddon
+{
+class LanguageHook;
+}
+
 namespace XBMCAddonUtils
 {
-  //***********************************************************
-  // Some simple helpers
-  void guiLock();
-  void guiUnlock();
-  //***********************************************************
-
   class GuiLock
   {
   public:
-    GuiLock() { guiLock(); }
-    ~GuiLock() { guiUnlock(); }
+    GuiLock(XBMCAddon::LanguageHook* languageHook, bool offScreen);
+    ~GuiLock();
+
+  protected:
+    XBMCAddon::LanguageHook* m_languageHook = nullptr;
+    bool m_offScreen = false;
   };
 
   class InvertSingleLockGuard
   {
     CSingleLock& lock;
   public:
-    InvertSingleLockGuard(CSingleLock& _lock) : lock(_lock) { lock.Leave(); }
+    explicit InvertSingleLockGuard(CSingleLock& _lock) : lock(_lock) { lock.Leave(); }
     ~InvertSingleLockGuard() { lock.Enter(); }
   };
 
-//  class WaitForNotify
-//  {
-//    std::vector<HANDLE> thoseWaiting;
-//    CCriticalSection csection; // Ha!
-//    CCriticalSection atomicWait;
-//  public:
-//    void wait();
-//    void notify();
-//    void notifyAll();
-//  };
-
-#define LOCKGUI XBMCAddonUtils::GuiLock __gl
 
   /*
    * Looks in references.xml for image name
    * If none exist return default image name
    */
-  const char *getDefaultImage(char* cControlType, char* cTextureType, char* cDefault);
+  const char *getDefaultImage(char* cControlType, char* cTextureType);
 
-#ifdef ENABLE_TRACE_API
+#ifdef ENABLE_XBMC_TRACE_API
   class TraceGuard
   {
     const char* function;
@@ -93,17 +86,17 @@ namespace XBMCAddonUtils
 
     const char* getSpaces();
 
-    TraceGuard(const char* _function);
+    explicit TraceGuard(const char* _function);
     TraceGuard();
     ~TraceGuard();
   };
 #endif
 }
 
-#ifdef ENABLE_TRACE_API
-#define TRACE XBMCAddonUtils::TraceGuard _tg(__PRETTY_FUNCTION__)
+#ifdef ENABLE_XBMC_TRACE_API
+#define XBMC_TRACE XBMCAddonUtils::TraceGuard _tg(__PRETTY_FUNCTION__)
 #else
-#define TRACE
+#define XBMC_TRACE
 #endif
 
 

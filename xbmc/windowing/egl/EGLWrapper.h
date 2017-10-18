@@ -20,6 +20,9 @@
  *
  */
 
+#include <string>
+#include <vector>
+
 #include "guilib/Resolution.h"
 #include <EGL/egl.h>
 class CEGLNativeType;
@@ -67,6 +70,7 @@ public:
   static void* GetProcAddress(const char* function);
 
 private:
-    CEGLNativeType          *m_nativeTypes;
-    EGLint                  m_result;
+
+  CEGLNativeType *m_nativeTypes;
+  EGLint         m_result;
 };
